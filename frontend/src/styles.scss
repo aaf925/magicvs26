@@ -25,6 +25,13 @@ h1, h2, h3, .font-headline {
 
 .arcane-gradient {
   background: linear-gradient(45deg, #ecb2ff, #8e44ad);
+
+  /* Fix for text gradients */
+  &.bg-clip-text {
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
 }
 
 .hero-mask {
