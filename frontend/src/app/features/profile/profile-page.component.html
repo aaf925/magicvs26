@@ -1,0 +1,62 @@
+<section class="relative overflow-hidden pt-32 pb-24">
+  <div class="absolute inset-0 pointer-events-none">
+    <div class="absolute left-[-8rem] top-24 h-72 w-72 rounded-full bg-purple-600/20 blur-3xl"></div>
+    <div class="absolute right-[-5rem] top-80 h-80 w-80 rounded-full bg-amber-400/10 blur-3xl"></div>
+    <div class="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-white/5 to-transparent"></div>
+  </div>
+
+  <div class="relative z-10 max-w-screen-2xl mx-auto px-6">
+    <div class="mb-6 flex items-center justify-between gap-4">
+      <div>
+        <p class="text-[10px] font-black uppercase tracking-[0.45em] text-purple-200/90">MagicVS / Profile</p>
+        <h1 class="mt-3 text-4xl font-black tracking-tight text-white md:text-5xl">Perfil del usuario</h1>
+      </div>
+
+      <a routerLink="/" class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold uppercase tracking-[0.3em] text-zinc-200 transition-colors hover:bg-white/10">
+        <span class="material-symbols-outlined text-sm">arrow_back</span>
+        Volver
+      </a>
+    </div>
+
+    @if (loading()) {
+      <div class="space-y-8">
+        <div class="loading-shell animate-pulse"></div>
+        <div class="grid gap-5 xl:grid-cols-2">
+          @for (placeholder of [1, 2]; track placeholder) {
+            <div class="loading-deck animate-pulse"></div>
+          }
+        </div>
+      </div>
+    } @else if (error()) {
+      <div class="rounded-[2rem] border border-white/6 bg-zinc-950/70 p-8 shadow-2xl shadow-black/20">
+        <h2 class="text-2xl font-black text-white">No se pudo abrir el perfil</h2>
+        <p class="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">{{ error() }}</p>
+        <div class="mt-6 flex flex-wrap gap-3">
+          <a routerLink="/login" class="inline-flex items-center rounded-full bg-purple-600 px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-purple-500">
+            Ir a login
+          </a>
+          <a routerLink="/" class="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-5 py-2.5 text-sm font-bold text-zinc-100 transition-colors hover:bg-white/10">
+            Volver al inicio
+          </a>
+        </div>
+      </div>
+    } @else if (profile()) {
+      <div class="space-y-8">
+        <app-profile-header
+          [profile]="profile()!"
+          [email]="showPrivateDetails() ? storedUser()?.email ?? null : null"
+          [registrationDate]="showPrivateDetails() ? storedUser()?.createdAt ?? null : null"
+          [role]="showPrivateDetails() ? storedUser()?.role ?? null : null"
+          [isOwnProfile]="showPrivateDetails()"
+        />
+
+        <app-profile-deck-list
+          [decks]="decks()"
+          [loading]="loading()"
+          [error]="error()"
+          [isOwnProfile]="showPrivateDetails()"
+        />
+      </div>
+    }
+  </div>
+</section>

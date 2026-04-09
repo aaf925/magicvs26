@@ -1,0 +1,78 @@
+<section class="relative overflow-hidden rounded-[2rem] border border-white/5 bg-zinc-950/70 backdrop-blur-xl shadow-2xl shadow-purple-950/20">
+  <div class="absolute inset-0 opacity-80">
+    <div class="absolute -top-20 -right-20 h-64 w-64 rounded-full bg-purple-600/20 blur-3xl"></div>
+    <div class="absolute -bottom-24 left-16 h-56 w-56 rounded-full bg-fuchsia-500/10 blur-3xl"></div>
+  </div>
+
+  <div class="relative z-10 grid gap-8 px-6 py-8 md:px-10 md:py-10 lg:grid-cols-[1.3fr_0.9fr] lg:items-center">
+    <div class="flex flex-col gap-6 md:flex-row md:items-start md:gap-6">
+      <div class="profile-avatar shrink-0 flex h-24 w-24 items-center justify-center overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-purple-500 via-fuchsia-500 to-orange-300 text-3xl font-black text-white shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+        @if (profile.avatarUrl) {
+          <img [src]="profile.avatarUrl" [alt]="profile.username" class="h-full w-full object-cover">
+        } @else {
+          {{ initials(profile.displayName || profile.username) }}
+        }
+      </div>
+
+      <div class="min-w-0 flex-1">
+        <div class="mb-3 flex flex-wrap items-center gap-2">
+          <span class="inline-flex items-center rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.35em] text-purple-200">
+            {{ isOwnProfile ? 'Tu perfil' : 'Perfil de usuario' }}
+          </span>
+          <span class="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-zinc-300">
+            {{ profile.friendTag || 'Sin friendTag' }}
+          </span>
+        </div>
+
+        <h1 class="truncate text-4xl font-black tracking-tight text-white md:text-5xl">
+          {{ profile.displayName || profile.username }}
+        </h1>
+        <p class="mt-2 text-sm font-medium uppercase tracking-[0.35em] text-zinc-400">@{{ profile.username }}</p>
+
+        <p class="mt-4 max-w-3xl text-sm leading-7 text-zinc-300 md:text-base">
+          {{ profile.bio || 'Todavía no hay biografía disponible para este usuario.' }}
+        </p>
+      </div>
+    </div>
+
+    <div class="grid gap-3 sm:grid-cols-2">
+      <div class="info-pill">
+        <span class="label">Email</span>
+        <span class="value">{{ email || 'No disponible' }}</span>
+      </div>
+      <div class="info-pill">
+        <span class="label">Registro</span>
+        <span class="value">{{ formatDate(registrationDate) }}</span>
+      </div>
+      <div class="info-pill">
+        <span class="label">Rol</span>
+        <span class="value">{{ role || 'No disponible' }}</span>
+      </div>
+      <div class="info-pill">
+        <span class="label">País</span>
+        <span class="value">{{ profile.country || 'No disponible' }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="relative z-10 border-t border-white/5 bg-black/10 px-6 py-5 md:px-10">
+    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div class="stat-card">
+        <span class="stat-label">ELO</span>
+        <span class="stat-value">{{ profile.eloRating ?? '—' }}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Partidas</span>
+        <span class="stat-value">{{ profile.gamesPlayed ?? 0 }}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Victorias</span>
+        <span class="stat-value">{{ profile.gamesWon ?? 0 }}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Mazos</span>
+        <span class="stat-value">{{ profile.decksCount ?? 0 }}</span>
+      </div>
+    </div>
+  </div>
+</section>

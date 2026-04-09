@@ -1,0 +1,48 @@
+.info-pill {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 1rem 1rem 0.95rem;
+}
+
+.label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(161, 161, 170, 0.9);
+}
+
+.value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #f4f4f5;
+  word-break: break-word;
+}
+
+.stat-card {
+  border-radius: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: linear-gradient(180deg, rgba(24, 24, 27, 0.86), rgba(10, 10, 10, 0.7));
+  padding: 1rem 1.1rem;
+}
+
+.stat-label {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: rgba(161, 161, 170, 0.85);
+}
+
+.stat-value {
+  display: block;
+  margin-top: 0.55rem;
+  font-size: 1.55rem;
+  font-weight: 800;
+  color: white;
+}

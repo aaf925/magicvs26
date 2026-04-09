@@ -1,0 +1,121 @@
+<section class="mt-8 md:mt-10">
+  <div class="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+    <div>
+      <h2 class="text-3xl font-black tracking-tight text-white">Mazos del usuario</h2>
+      <p class="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+        Consulta el estado de sus listas, el formato utilizado y la última actualización disponible.
+      </p>
+    </div>
+
+    @if (!loading && !error) {
+      <span class="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.35em] text-zinc-300">
+        {{ decks.length }} mazos
+      </span>
+    }
+  </div>
+
+  @if (loading) {
+    <div class="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
+      @for (placeholder of [1, 2, 3]; track placeholder) {
+        <article class="skeleton-card animate-pulse"></article>
+      }
+    </div>
+  } @else if (error) {
+    <div class="rounded-[1.75rem] border border-red-500/20 bg-red-500/5 p-6 text-red-200">
+      <h3 class="text-lg font-bold">No se pudieron cargar los mazos</h3>
+      <p class="mt-2 text-sm leading-6 text-red-100/80">{{ error }}</p>
+    </div>
+  } @else if (decks.length === 0) {
+    <div class="empty-state rounded-[1.75rem] border border-white/8 bg-zinc-950/60 p-8 text-center">
+      <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/5 text-zinc-300">
+        <span class="material-symbols-outlined text-3xl">folder_open</span>
+      </div>
+      <h3 class="text-2xl font-bold text-white">
+        {{ isOwnProfile ? 'Todavía no tienes mazos' : 'Este usuario no tiene mazos visibles' }}
+      </h3>
+      <p class="mx-auto mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
+        {{ isOwnProfile ? 'Cuando crees tus primeros mazos aparecerán aquí con su formato, colores y última actualización.' : 'Cuando publique listas o el backend exponga más información, se mostrarán aquí.' }}
+      </p>
+    </div>
+  } @else {
+    <div class="grid gap-5 xl:grid-cols-2">
+      @for (deck of decks; track deck.id) {
+        <article class="deck-card">
+          <div class="flex items-start justify-between gap-4">
+            <div class="min-w-0">
+              <p class="deck-kicker">{{ deck.formatName || 'Formato no definido' }}</p>
+              <h3 class="mt-2 truncate text-2xl font-black text-white">{{ deck.name }}</h3>
+              <p class="mt-2 text-sm leading-6 text-zinc-300 line-clamp-2">
+                {{ deck.description || 'Sin descripción disponible.' }}
+              </p>
+            </div>
+
+            <span class="rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.3em]"
+                  [class.bg-emerald-500/10]="deck.isPublic"
+                  [class.text-emerald-200]="deck.isPublic"
+                  [class.border]="true"
+                  [class.border-emerald-500/20]="deck.isPublic"
+                  [class.bg-zinc-500/10]="!deck.isPublic"
+                  [class.text-zinc-300]="!deck.isPublic"
+                  [class.border-zinc-500/20]="!deck.isPublic">
+              {{ deck.isPublic ? 'Público' : 'Privado' }}
+            </span>
+          </div>
+
+          <div class="mt-6 grid gap-3 sm:grid-cols-3">
+            <div class="mini-stat">
+              <span class="mini-label">Cartas</span>
+              <span class="mini-value">{{ deck.totalCards ?? 0 }}</span>
+            </div>
+            <div class="mini-stat sm:col-span-2">
+              <span class="mini-label">Colores principales</span>
+              <div class="mt-2 flex flex-wrap gap-2">
+                @if (deckColors(deck).length > 0) {
+                  @for (color of deckColors(deck); track color) {
+                    <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-zinc-100">
+                      {{ color }}
+                    </span>
+                  }
+                } @else {
+                  <span class="text-sm text-zinc-500">No disponible</span>
+                }
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-white/5 pt-4 text-xs uppercase tracking-[0.28em] text-zinc-400">
+            <span>Actualizado: {{ formatDate(deck.updatedAt) }}</span>
+            <button type="button" class="inline-flex items-center gap-2 font-bold text-purple-200 transition-colors hover:text-white" (click)="toggleDeck(deck.id)">
+              <span>{{ expandedDeckId === deck.id ? 'Ocultar detalle' : 'Ver detalle' }}</span>
+              <span class="material-symbols-outlined text-sm">{{ expandedDeckId === deck.id ? 'expand_less' : 'expand_more' }}</span>
+            </button>
+          </div>
+
+          @if (expandedDeckId === deck.id) {
+            <div class="mt-5 rounded-2xl border border-white/8 bg-black/20 p-4 text-sm leading-6 text-zinc-300">
+              <p class="font-bold text-white">Detalle del mazo</p>
+              <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <span class="detail-label">Descripción</span>
+                  <p class="detail-value">{{ deck.description || 'Sin descripción disponible.' }}</p>
+                </div>
+                <div>
+                  <span class="detail-label">Colores</span>
+                  <p class="detail-value">{{ deckColors(deck).length > 0 ? deckColors(deck).join(', ') : 'No disponible' }}</p>
+                </div>
+                <div>
+                  <span class="detail-label">Creado</span>
+                  <p class="detail-value">{{ formatDate(deck.createdAt) }}</p>
+                </div>
+                <div>
+                  <span class="detail-label">Visibilidad</span>
+                  <p class="detail-value">{{ deck.isPublic ? 'Público' : 'Privado' }}</p>
+                </div>
+              </div>
+            </div>
+          }
+        </article>
+      }
+    </div>
+  }
+</section>
