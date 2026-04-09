@@ -5,6 +5,8 @@ import { NewsComponent } from './features/news/news';
 import { MetaComponent } from './features/meta/meta';
 import { Login } from './features/login/login';
 import { Registro } from './features/registro/registro';
+import { CatalogComponent } from './features/catalog/catalog';
+import { CardDetailComponent } from './features/catalog/card-detail';
 
 export const routes: Routes = [
   {
@@ -15,7 +17,9 @@ export const routes: Routes = [
       { path: 'noticias', component: NewsComponent },
       { path: 'meta', component: MetaComponent },
       { path: 'login', component: Login },
-      { path: 'registro', component: Registro }
+      { path: 'registro', component: Registro },
+      { path: 'cartas', component: CatalogComponent },
+      { path: 'cartas/:id', component: CardDetailComponent }
     ]
   }
 ];

@@ -19,25 +19,31 @@ h1, h2, h3, .font-headline {
 }
 
 .glass-panel {
+  background: rgba(42, 42, 42, 0.4);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.arcane-gradient {
-  background: linear-gradient(45deg, #ecb2ff, #8e44ad);
+.mana-glow-green {
+  box-shadow: 0 0 15px rgba(34, 197, 94, 0.4);
+}
 
-  /* Fix for text gradients */
-  &.bg-clip-text {
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+.mana-glow-black {
+  box-shadow: 0 0 15px rgba(168, 85, 247, 0.4);
+}
+
+.card-glow {
+  filter: drop-shadow(0 0 45px rgba(142, 68, 173, 0.4));
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(200%);
   }
-}
-
-.hero-mask {
-  mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
 }
 
 .selection\:bg-primary\/30::selection {
   background-color: rgba(236, 178, 255, 0.3);
 }
+
