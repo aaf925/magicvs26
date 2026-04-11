@@ -15,6 +15,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+import javax.net.ssl.*;
+import java.security.SecureRandom;
+import java.security.cert.X509Certificate;
+
 @Service
 @Slf4j
 public class NewsScrapingService {
@@ -25,8 +29,22 @@ public class NewsScrapingService {
         List<News> newsList = new ArrayList<>();
         try {
             log.info("Starting scrape from {}", MTG_GOLDFISH_URL);
+            
+            // Bypass SSL for MTGGoldfish scrape (PKIX path building failed workaround)
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(null, new TrustManager[]{new X509TrustManager() {
+                public X509Certificate[] getAcceptedIssuers() { return null; }
+                public void checkClientTrusted(X509Certificate[] certs, String authType) { }
+                public void checkServerTrusted(X509Certificate[] certs, String authType) { }
+            }}, new SecureRandom());
+
             Document doc = Jsoup.connect(MTG_GOLDFISH_URL)
+                    .sslSocketFactory(sslContext.getSocketFactory())
                     .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
+                    .header("Accept-Language", "es-ES,es;q=0.9,en;q=0.8")
+                    .header("Cache-Control", "no-cache")
+                    .header("Pragma", "no-cache")
                     .get();
             Elements articles = doc.select(".article-tile");
 

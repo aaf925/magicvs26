@@ -12,7 +12,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/news")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*") // Allow frontend access
 public class NewsController {
 
     private final NewsService newsService;
