@@ -1,7 +1,9 @@
 package com.magicvs.backend.config;
 
 import com.magicvs.backend.repository.CardRepository;
+import com.magicvs.backend.repository.MetaDeckRepository;
 import com.magicvs.backend.service.ScryfallService;
+import com.magicvs.backend.service.MetaScrapingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
@@ -14,10 +16,17 @@ public class DatabaseInitializer implements CommandLineRunner {
 
     private final CardRepository cardRepository;
     private final ScryfallService scryfallService;
+    private final MetaDeckRepository metaDeckRepository;
+    private final MetaScrapingService metaScrapingService;
 
-    public DatabaseInitializer(CardRepository cardRepository, ScryfallService scryfallService) {
+    public DatabaseInitializer(CardRepository cardRepository, 
+                               ScryfallService scryfallService,
+                               MetaDeckRepository metaDeckRepository,
+                               MetaScrapingService metaScrapingService) {
         this.cardRepository = cardRepository;
         this.scryfallService = scryfallService;
+        this.metaDeckRepository = metaDeckRepository;
+        this.metaScrapingService = metaScrapingService;
     }
 
     @Override
@@ -32,6 +41,13 @@ public class DatabaseInitializer implements CommandLineRunner {
             logger.info("Importación automática completada en {} segundos.", (endTime - startTime) / 1000);
         } else {
             logger.info("Base de datos de cartas ya poblada con {} registros. Omitiendo importación inicial.", cardRepository.count());
+        }
+
+        if (metaDeckRepository.count() == 0) {
+            logger.info("Base de datos de Metajuego vacía. Iniciando scraping automático inicial de MTGGoldfish...");
+            metaScrapingService.syncMetagame("30");
+        } else {
+            logger.info("Metajuego ya inicializado con {} mazos. Esperando al demonio nocturno para actualizar.", metaDeckRepository.count());
         }
     }
 }

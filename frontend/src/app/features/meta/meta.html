@@ -15,33 +15,31 @@
       </p>
     </div>
 
-    <!-- Controls / Filters moved inside header for tighter layout -->
-    <div class="relative min-w-[240px] group w-full md:w-auto">
-      <button class="w-full flex items-center justify-between px-4 py-2.5 rounded-lg bg-[#1c1b1b] border border-outline-variant/20 text-on-surface font-body text-sm hover:border-primary/50 transition-all">
+    <!-- Controls & Filters -->
+    <div class="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+      
+      <!-- Sync Button -->
+      <button (click)="syncMetagame()" [disabled]="syncing" class="w-full md:w-auto flex items-center justify-between h-full px-6 py-2.5 rounded-lg bg-gradient-to-r from-primary-container/80 to-primary-container shadow-lg hover:scale-105 transition-all outline-none font-bold">
         <span class="flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary text-lg">calendar_today</span>
-          {{selectedFilter}}
+          <span class="material-symbols-outlined text-white text-lg" [class.animate-spin]="syncing">sync</span>
+          <span class="text-white">{{ syncing ? 'Sincronizando...' : 'Sincronizar' }}</span>
         </span>
-        <span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-colors">expand_more</span>
       </button>
-      <div class="absolute z-50 top-full lg:top-auto lg:bottom-full left-0 w-full mb-2 lg:mb-2 bg-[#1c1b1b] border border-outline-variant/30 rounded-lg shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 py-2">
-        @for (filter of filters; track filter) {
-          <div (click)="selectFilter(filter)" 
-               class="px-4 py-2 text-sm cursor-pointer transition-colors"
-               [class.text-on-surface]="selectedFilter === filter"
-               [class.bg-primary/20]="selectedFilter === filter"
-               [class.border-l-2]="selectedFilter === filter"
-               [class.border-primary]="selectedFilter === filter"
-               [class.text-on-surface-variant]="selectedFilter !== filter"
-               [class.hover:text-white]="selectedFilter !== filter"
-               [class.hover:bg-primary/10]="selectedFilter !== filter">
-            {{filter}}
-          </div>
-        }
-      </div>
+      
     </div>
   </div>
 </header>
+
+@if (loading) {
+  <div class="flex justify-center p-12">
+    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+  </div>
+} @else if (error) {
+  <div class="text-center p-12 text-error">
+    <span class="material-symbols-outlined text-5xl mb-2">error</span>
+    <p>{{error}}</p>
+  </div>
+} @else {
 
 <!-- Main Metagame List (Accordion Style) -->
 <main class="px-6 pb-24">
@@ -58,27 +56,11 @@
              (click)="toggleExpand(deck)">
           
           <div class="flex items-center gap-6">
-            <div class="flex flex-col items-center justify-center p-3 rounded-lg border"
-                 [class.bg-tertiary-container/10]="deck.tier === 1"
-                 [class.border-tertiary/20]="deck.tier === 1"
-                 [class.bg-outline/5]="deck.tier === 2"
-                 [class.border-outline/20]="deck.tier === 2">
-              <span class="material-symbols-outlined text-3xl" 
-                    [class.text-tertiary]="deck.tier === 1"
-                    [class.text-outline]="deck.tier === 2"
-                    style="font-variation-settings: 'FILL' 1;">military_tech</span>
-              <span class="text-[10px] font-bold uppercase tracking-widest mt-1"
-                    [class.text-tertiary]="deck.tier === 1"
-                    [class.text-outline]="deck.tier === 2">Tier {{deck.tier}}</span>
-            </div>
             
             <div>
               <div class="flex items-center gap-2 mb-1">
                 <h2 class="font-headline text-2xl font-bold">{{deck.name}}</h2>
-                @if (deck.player) {
-                  <span class="text-xs font-medium text-on-surface-variant/70 bg-surface-container-high px-2 py-0.5 rounded-full ml-2">{{deck.player}}</span>
-                }
-                <div class="flex gap-1">
+                <div class="flex gap-1 ml-2">
                   @for (color of deck.colors; track color) {
                     <span class="w-4 h-4 rounded-full block border border-black/10" [class]="'mana-' + color"></span>
                   }
@@ -94,8 +76,8 @@
               <div class="text-xs text-on-surface-variant uppercase tracking-widest font-bold">Presencia</div>
             </div>
             <div class="text-center md:text-right">
-              <div class="text-2xl font-headline font-bold text-secondary">{{deck.winrate}} WR</div>
-              <div class="text-xs text-on-surface-variant uppercase tracking-widest font-bold">Win Rate</div>
+              <div class="text-2xl font-headline font-bold text-secondary">{{deck.price}}</div>
+              <div class="text-xs text-on-surface-variant uppercase tracking-widest font-bold">Tabletop</div>
             </div>
             <span class="material-symbols-outlined text-on-surface-variant transition-transform" 
                   [class.rotate-180]="deck.isExpanded">expand_more</span>
@@ -104,136 +86,157 @@
 
         <!-- Expanded Content -->
         @if (deck.isExpanded) {
-          <div class="p-6 md:p-8 bg-surface-container-lowest/40 grid grid-cols-1 lg:grid-cols-12 gap-8">
-            <!-- Left Stats Panel -->
-            <div class="lg:col-span-3 space-y-6">
-              <div class="space-y-4">
-                <div class="flex justify-between items-center text-sm p-3 rounded-lg bg-surface-container-high/50">
-                  <span class="text-on-surface-variant">Criaturas</span>
-                  <span class="font-headline font-bold text-lg">{{deck.creaturesCount}}</span>
+          <div class="p-6 md:p-8 bg-surface-container-lowest/40 flex flex-col md:flex-row gap-8 lg:gap-12 border-t border-outline-variant/10">
+
+            <!-- LEFT SIDEBAR -->
+            <div class="w-full md:w-[240px] flex-shrink-0 flex flex-col gap-3">
+              
+              <!-- Stats Boxes DYNAMICS -->
+              <div class="flex flex-col bg-surface-container-high rounded-lg border border-outline-variant/5 shadow-sm">
+                <div class="flex items-center justify-between px-5 py-3.5 border-b border-outline-variant/5">
+                   <span class="text-on-surface-variant text-sm tracking-wide">Criaturas</span>
+                   <span class="text-white font-bold">{{deck.creatureCount}}</span>
                 </div>
-                <div class="flex justify-between items-center text-sm p-3 rounded-lg bg-surface-container-high/50">
-                  <span class="text-on-surface-variant">Hechizos</span>
-                  <span class="font-headline font-bold text-lg">{{deck.spellsCount}}</span>
+                <div class="flex items-center justify-between px-5 py-3.5 border-b border-outline-variant/5">
+                   <span class="text-on-surface-variant text-sm tracking-wide">Hechizos</span>
+                   <span class="text-white font-bold">{{deck.spellCount}}</span>
                 </div>
-                <div class="flex justify-between items-center text-sm p-3 rounded-lg bg-surface-container-high/50">
-                  <span class="text-on-surface-variant">Tierras</span>
-                  <span class="font-headline font-bold text-lg">{{deck.landsCount}}</span>
+                <div class="flex items-center justify-between px-5 py-3.5">
+                   <span class="text-on-surface-variant text-sm tracking-wide">Tierras</span>
+                   <span class="text-white font-bold">{{deck.landCount}}</span>
                 </div>
               </div>
-              <button class="w-full py-4 rounded-lg text-white font-bold tracking-tight shadow-lg transition-all flex items-center justify-center gap-2"
-                      (click)="toggleViewMode(deck, $event)"
-                      [class.bg-gradient-to-r]="!deck.showFullList"
-                      [class.from-primary-container]="!deck.showFullList"
-                      [class.to-primary-container/80]="!deck.showFullList"
-                      [class.shadow-primary-container/20]="!deck.showFullList"
-                      [class.hover:scale-[1.02]]="!deck.showFullList"
-                      [class.bg-surface-container-highest]="deck.showFullList"
-                      [class.border]="deck.showFullList"
-                      [class.border-outline-variant/20]="deck.showFullList"
-                      [class.text-on-surface]="deck.showFullList"
-                      [class.hover:bg-surface-container-high]="deck.showFullList">
-                
-                @if (!deck.showFullList) {
-                  Ver lista completa
-                  <span class="material-symbols-outlined text-sm">arrow_forward</span>
-                } @else {
-                  <span class="material-symbols-outlined text-sm">view_carousel</span>
-                  Volver a galería
-                }
-              </button>
-            </div>
-
-            <!-- Right Panel: Gallery or Full List -->
-            <div class="lg:col-span-9">
-              @if (!deck.showFullList) {
-                <!-- Gallery View -->
-                <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  @for (card of deck.gallery; track card.name) {
-                    <div class="flex flex-col gap-2">
-                      <div class="aspect-[2/3] rounded-lg overflow-hidden relative group border border-outline-variant/10">
-                        <img [src]="card.imageUrl" [alt]="card.name" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110">
-                        <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end p-3">
-                          <span class="text-[10px] font-bold text-white uppercase tracking-tighter">{{card.name}}</span>
-                        </div>
-                      </div>
-                      <span class="text-[9px] uppercase tracking-widest text-primary/60 font-bold px-1 flex items-center gap-1">
-                        <span class="material-symbols-outlined text-[10px]">image_search</span> Scraped Image
-                      </span>
-                    </div>
-                  }
-                </div>
-              } @else {
-                <!-- Full Text List Mode -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                  <!-- Criaturas -->
-                  <div class="space-y-4">
-                    <h3 class="font-headline text-xs font-bold uppercase tracking-widest text-primary border-b border-primary/20 pb-2 flex justify-between">
-                      Criaturas <span>{{deck.creaturesCount}}</span>
-                    </h3>
-                    <ul class="space-y-1">
-                      @for (item of deck.fullList.creatures; track item.name) {
-                        <li class="card-list-item flex justify-between p-2 rounded text-sm transition-colors group">
-                          <span class="text-on-surface">{{item.quantity}} {{item.name}}</span>
-                          <span class="text-on-surface-variant/50 group-hover:text-primary transition-colors cursor-help material-symbols-outlined text-xs">info</span>
-                        </li>
-                      }
-                    </ul>
-                  </div>
-                  <!-- Hechizos -->
-                  <div class="space-y-4">
-                    <h3 class="font-headline text-xs font-bold uppercase tracking-widest text-secondary border-b border-secondary/20 pb-2 flex justify-between">
-                      Hechizos <span>{{deck.spellsCount}}</span>
-                    </h3>
-                    <ul class="space-y-1">
-                      @for (item of deck.fullList.spells; track item.name) {
-                        <li class="card-list-item flex justify-between p-2 rounded text-sm transition-colors group">
-                          <span class="text-on-surface">{{item.quantity}} {{item.name}}</span>
-                          <span class="text-on-surface-variant/50 group-hover:text-secondary transition-colors cursor-help material-symbols-outlined text-xs">info</span>
-                        </li>
-                      }
-                    </ul>
-                  </div>
-                  <!-- Tierras & Sideboard Wrapper (to match grid layout) -->
-                  <div class="space-y-8">
-                    <!-- Tierras -->
-                    <div class="space-y-4">
-                      <h3 class="font-headline text-xs font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/20 pb-2 flex justify-between">
-                        Tierras <span>{{deck.landsCount}}</span>
-                      </h3>
-                      <ul class="space-y-1">
-                        @for (item of deck.fullList.lands; track item.name) {
-                          <li class="card-list-item flex justify-between p-2 rounded text-sm transition-colors group">
-                            <span class="text-on-surface">{{item.quantity}} {{item.name}}</span>
-                            <span class="text-on-surface-variant/50 group-hover:text-white transition-colors cursor-help material-symbols-outlined text-xs">info</span>
-                          </li>
-                        }
-                      </ul>
-                    </div>
-                    <!-- Sideboard -->
-                    <div class="space-y-4">
-                      <h3 class="font-headline text-xs font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/20 pb-2 flex justify-between">
-                        Sideboard <span>15</span>
-                      </h3>
-                      <ul class="space-y-1">
-                        @for (item of deck.fullList.sideboard; track item.name) {
-                          <li class="card-list-item flex justify-between p-2 rounded text-sm transition-colors group">
-                            <span class="text-on-surface">{{item.quantity}} {{item.name}}</span>
-                            <span class="text-on-surface-variant/50 group-hover:text-white transition-colors cursor-help material-symbols-outlined text-xs">info</span>
-                          </li>
-                        }
-                      </ul>
-                    </div>
-                  </div>
+              
+              @if (deck.sideboardCount! > 0) {
+                <div class="flex items-center justify-between px-5 py-3.5 bg-surface-container-highest rounded-lg border border-primary/20 shadow-sm">
+                   <span class="text-primary text-sm tracking-wide font-bold">Banquillo</span>
+                   <span class="text-primary font-bold">{{deck.sideboardCount}}</span>
                 </div>
               }
+
+              <div class="mt-4 flex flex-col gap-3">
+                <!-- Action Toggle Button -->
+                <button (click)="toggleFullList(deck)"
+                        class="w-full px-6 py-3.5 rounded-lg transition-all font-bold text-sm tracking-wide flex items-center justify-center gap-2 shadow-lg"
+                        [class.bg-[#8a42a6]]="!deck.showFullList"
+                        [class.text-white]="!deck.showFullList"
+                        [class.hover:brightness-110]="!deck.showFullList"
+                        [class.bg-[#3a3a3a]]="deck.showFullList"
+                        [class.text-white]="deck.showFullList"
+                        [class.hover:brightness-110]="deck.showFullList">
+                  @if (!deck.showFullList) {
+                    <span>Ver lista completa</span>
+                    <span class="material-symbols-outlined text-lg">arrow_forward</span>
+                  } @else {
+                    <span class="material-symbols-outlined text-lg">arrow_back</span>
+                    <span>Volver a galería</span>
+                  }
+                </button>
+
+                <!-- External Source Button -->
+                <a [href]="deck.fullListUrl" target="_blank"
+                   class="w-full px-6 py-3.5 rounded-lg bg-surface border border-outline-variant/20 hover:border-primary/50 text-on-surface transition-all flex items-center justify-center gap-2 group font-bold text-xs tracking-wide">
+                  <span>Ver en MTGGoldfish</span>
+                  <span class="material-symbols-outlined text-[16px] group-hover:translate-x-1 transition-transform">open_in_new</span>
+                </a>
+              </div>
             </div>
+
+            <!-- RIGHT CONTENT AREA -->
+            <div class="flex-1">
+              @if (deck.showFullList) {
+                <!-- Segregated Categorical List View -->
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-x-8 gap-y-6">
+                  
+                  <!-- Criaturas Column -->
+                  <div class="flex flex-col gap-1">
+                    <div class="flex items-center justify-between border-b border-[#a96bbd]/30 pb-2 mb-2">
+                       <span class="text-[10px] font-bold text-[#a96bbd] tracking-widest leading-none">CRIATURAS</span>
+                       <span class="text-[10px] font-bold text-[#a96bbd] leading-none">{{deck.creatureCount}}</span>
+                    </div>
+                    @for (card of deck.creatures; track card.name) {
+                      <div class="flex items-center gap-3 py-1.5 hover:bg-surface-variant/20 transition-colors cursor-default rounded px-1">
+                        <span class="font-mono text-on-surface-variant font-bold w-4 text-right">{{card.quantity}}</span>
+                        <span class="text-[#e2e2e2] text-[13px] truncate font-body">{{card.name}}</span>
+                      </div>
+                    }
+                  </div>
+
+                  <!-- Hechizos Column -->
+                  <div class="flex flex-col gap-1">
+                    <div class="flex items-center justify-between border-b border-[#6ba6bd]/30 pb-2 mb-2">
+                       <span class="text-[10px] font-bold text-[#6ba6bd] tracking-widest leading-none">HECHIZOS</span>
+                       <span class="text-[10px] font-bold text-[#6ba6bd] leading-none">{{deck.spellCount}}</span>
+                    </div>
+                    @for (card of deck.spells; track card.name) {
+                      <div class="flex items-center gap-3 py-1.5 hover:bg-surface-variant/20 transition-colors cursor-default rounded px-1">
+                        <span class="font-mono text-on-surface-variant font-bold w-4 text-right">{{card.quantity}}</span>
+                        <span class="text-[#e2e2e2] text-[13px] truncate font-body">{{card.name}}</span>
+                      </div>
+                    }
+                  </div>
+
+                  <!-- Tierras Column -->
+                  <div class="flex flex-col gap-1">
+                    <div class="flex items-center justify-between border-b border-on-surface-variant/30 pb-2 mb-2">
+                       <span class="text-[10px] font-bold text-on-surface-variant tracking-widest leading-none">TIERRAS</span>
+                       <span class="text-[10px] font-bold text-on-surface-variant leading-none">{{deck.landCount}}</span>
+                    </div>
+                    @for (card of deck.lands; track card.name) {
+                      <div class="flex items-center gap-3 py-1.5 hover:bg-surface-variant/20 transition-colors cursor-default rounded px-1">
+                        <span class="font-mono text-on-surface-variant font-bold w-4 text-right">{{card.quantity}}</span>
+                        <span class="text-[#e2e2e2] text-[13px] truncate font-body">{{card.name}}</span>
+                      </div>
+                    }
+                  </div>
+
+                  <!-- Banquillo Column -->
+                  @if (deck.sideboard && deck.sideboard.length > 0) {
+                    <div class="flex flex-col gap-1">
+                      <div class="flex items-center justify-between border-b border-primary/30 pb-2 mb-2">
+                         <span class="text-[10px] font-bold text-primary tracking-widest leading-none">BANQUILLO</span>
+                         <span class="text-[10px] font-bold text-primary leading-none">{{deck.sideboardCount}}</span>
+                      </div>
+                      @for (card of deck.sideboard; track card.name) {
+                        <div class="flex items-center gap-3 py-1.5 hover:bg-surface-variant/10 transition-colors cursor-default rounded px-1 group opacity-80 hover:opacity-100">
+                          <span class="font-mono text-primary font-bold w-4 text-right">{{card.quantity}}</span>
+                          <span class="text-[#e2e2e2] text-[13px] truncate font-body">{{card.name}}</span>
+                        </div>
+                      }
+                    </div>
+                  }
+
+                </div>
+              } @else {
+                <!-- Gallery View -->
+                @if (deck.gallery && deck.gallery.length > 0) {
+                  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    @for (card of deck.gallery; track card.name) {
+                      <div class="flex flex-col gap-2 relative group w-full aspect-[2.2/3] lg:h-[340px] rounded-lg overflow-hidden border border-outline-variant/10 shadow-2xl bg-black">
+                        <!-- Object-top ensures the art piece is visible usually at top-center of crops -->
+                        <img [src]="card.imageUrl" [alt]="card.name" class="w-full h-full object-cover object-top transition-transform duration-700 ease-out group-hover:scale-[1.03]">
+                        <div class="absolute inset-0 bg-gradient-to-t from-[#0e0e0e] via-[#0e0e0e]/50 to-transparent flex flex-col justify-end p-5">
+                          <span class="text-[11px] font-bold text-[#e2e2e2] tracking-[0.15em] uppercase drop-shadow-md">{{card.name}}</span>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                } @else {
+                  <div class="text-center p-8 bg-surface-container rounded-lg border border-outline-variant/20">
+                    <span class="material-symbols-outlined text-4xl text-outline mb-2">visibility_off</span>
+                    <p class="text-on-surface-variant text-sm">No tenemos capturas de imagen para las cartas principales de este arquetipo todavía.</p>
+                  </div>
+                }
+              }
+            </div>
+
           </div>
         }
       </div>
     }
   </div>
 </main>
+}
 
 <!-- Background Decoration -->
 <div class="fixed inset-0 pointer-events-none -z-20 overflow-hidden">
