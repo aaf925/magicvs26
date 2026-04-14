@@ -32,7 +32,6 @@ export class CatalogComponent implements OnInit {
   // Dropdown visibility signals
   showTypeDropdown = signal(false);
   showRarityDropdown = signal(false);
-
   ngOnInit(): void {
     this.loadCards();
   }

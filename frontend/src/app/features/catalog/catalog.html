@@ -1,4 +1,4 @@
-<main class="min-h-screen pt-32 pb-24 px-4 sm:px-6 max-w-screen-2xl mx-auto">
+<main class="min-h-screen pt-32 pb-24 px-6 max-w-screen-2xl mx-auto">
   <header class="mb-16 space-y-8">
     <div class="flex flex-col items-center text-center space-y-4">
       <h1 class="font-headline text-5xl md:text-7xl font-bold tracking-tighter text-primary">
@@ -107,7 +107,7 @@
     </div>
   </section>
 
-  <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-0 sm:gap-1 md:gap-2">
+  <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-01284">
     <!-- State: Loading -->
     @if (isLoading()) {
       @for (i of [1,2,3,4,5,6,7,8,9,10]; track i) {
@@ -124,7 +124,11 @@
       @for (card of cardPage()?.cards; track card.id) {
         <div [routerLink]="['/cartas', card.id]" 
              class="group relative aspect-[2.5/3.5] bg-surface-container rounded-xl overflow-hidden hover:scale-[1.02] transition-all duration-300 shadow-xl hover:shadow-primary/10 cursor-pointer">
-          <img class="w-full h-full object-cover" [src]="card.imageUrl" [alt]="card.name" />
+          <img
+            class="w-full h-full object-cover"
+            [src]="card.imageUrl"
+            [alt]="card.name"
+          />
           <div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-6">
             <h3 class="font-headline text-lg font-bold text-white">{{ card.name }}</h3>
             <div class="flex justify-between items-center mt-2">

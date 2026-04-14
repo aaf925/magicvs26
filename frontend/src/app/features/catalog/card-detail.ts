@@ -18,6 +18,7 @@ export class CardDetailComponent implements OnInit {
 
   card?: Card;
   isLoading = true;
+  defaultImageUrl = 'https://cards.scryfall.io/art_crop/front/b/8/b8622d43-4815-44fa-8a7f-611427728468.jpg?1765674064';
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
@@ -25,6 +26,8 @@ export class CardDetailComponent implements OnInit {
       this.loadCard(id);
     }
   }
+
+
 
   loadCard(id: string): void {
     this.isLoading = true;

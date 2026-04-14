@@ -88,12 +88,5 @@ export class DeckSearchPanelComponent {
     this.error = null;
   }
 
-  onImageError(event: Event): void {
-    const target = event.target as HTMLImageElement | null;
-    if (!target) {
-      return;
-    }
 
-    target.src = this.fallbackImage;
-  }
 }

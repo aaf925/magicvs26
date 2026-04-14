@@ -53,10 +53,36 @@ export class CardService {
   }
 
   private mapBackendCardToCard(card: any): Card {
+    // Manejo especial para cartas con doble cara
+    if(card.name.includes('//')) {
+      const nameParts = card.name.split(' // ');
+      const firstName = nameParts[0].trim();
+      const secondName = nameParts[1].trim();
+      
+ 
+
+      return {
+        id: String(card.id),
+        name: card.name || '',
+        imageUrl: select card_faces.normal_image_uri from card_faces where card_faces.name = firstName  ;,
+        imageUrl2: select card_faces.normal_image_uri from card_faces where card_faces.name = secondName  ;,
+        manaCost: this.parseManaCost(card.manaCost),
+        type: card.typeLine || card.layout || '',
+        rarity: this.capitalize(card.rarity) || '',
+        oracleText: card.oracleText || '',
+        flavorText: card.flavorText || '',
+        powerToughness: card.power && card.toughness ? `${card.power}/${card.toughness}` : undefined,
+        legalities: this.normalizeLegalities(card.legalities),
+        price: this.normalizePrice(card.price)
+      };
+    }
+
+
     return {
       id: String(card.id),
       name: card.name || '',
       imageUrl: card.normalImageUri || card.smallImageUri || card.largeImageUri || card.pngImageUri || '',
+      imageUrl2: '',
       manaCost: this.parseManaCost(card.manaCost),
       type: card.typeLine || card.layout || '',
       rarity: this.capitalize(card.rarity) || '',

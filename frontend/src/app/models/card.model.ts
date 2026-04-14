@@ -2,6 +2,7 @@ export interface Card {
   id: string;
   name: string;
   imageUrl: string;
+  imageUrl2: string;
   manaCost: string[];
   type: string;
   rarity: string;
