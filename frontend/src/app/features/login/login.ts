@@ -67,6 +67,7 @@ export class Login {
       )
       .subscribe({
         next: (user) => {
+          this.message = `Bienvenido, ${user.displayName ?? user.username}!`;
           // backend must return a token on successful auth
           if (!user || !user.token) {
             // treat missing token as invalid credentials
@@ -78,6 +79,7 @@ export class Login {
           }
 
           localStorage.setItem('token', user.token);
+          localStorage.setItem('authToken', user.token);
           localStorage.setItem('user', JSON.stringify(user));
 
           this.ngZone.run(() => this.router.navigateByUrl('/'));
