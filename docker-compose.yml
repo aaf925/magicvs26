@@ -22,7 +22,7 @@ services:
       SMTP_USER: "noreplymagicvs@gmail.com"
       SMTP_PASS: "qhxmzwbsoozavefg"
       SMTP_FROM: "noreplymagicvs@gmail.com"
-      DECK_MIN_CARDS: ${DECK_MIN_CARDS:-10}
+      DECK_MIN_CARDS: ${DECK_MIN_CARDS:-60}
     ports:
       - "8080:8080"
     depends_on:

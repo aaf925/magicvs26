@@ -21,6 +21,7 @@ public interface CardRepository extends JpaRepository<Card, Long> {
         String getNormalImageUri();
         String getSmallImageUri();
         String getColorsJson();
+        String getRawJson();
     }
 
     Optional<Card> findByScryfallId(UUID scryfallId);
@@ -36,9 +37,11 @@ public interface CardRepository extends JpaRepository<Card, Long> {
                c.typeLine AS typeLine,
                c.normalImageUri AS normalImageUri,
                c.smallImageUri AS smallImageUri,
-               c.colorsJson AS colorsJson
+             c.colorsJson AS colorsJson,
+             c.rawJson AS rawJson
         FROM Card c
-        WHERE LOWER(c.name) LIKE LOWER(CONCAT('%', :name, '%'))
+         WHERE LOWER(c.name) LIKE LOWER(CONCAT('%', :name, '%'))
+            OR LOWER(c.rawJson) LIKE LOWER(CONCAT('%', :name, '%'))
         """)
     Page<CardSearchProjection> searchProjectedByName(@Param("name") String name, Pageable pageable);
 

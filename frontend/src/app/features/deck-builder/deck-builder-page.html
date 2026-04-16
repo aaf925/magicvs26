@@ -3,17 +3,41 @@
     <header class="flex flex-col gap-3 rounded-3xl border border-outline-variant/70 bg-surface-container-high/70 p-6 shadow-2xl shadow-black/20 backdrop-blur-xl md:flex-row md:items-end md:justify-between">
       <div>
         <p class="font-headline text-xs uppercase tracking-[0.2em] text-secondary/90">Deck Lab</p>
-        <h1 class="mt-2 font-headline text-3xl font-bold text-on-surface sm:text-4xl">Creador de Mazos</h1>
+        <h1 class="mt-2 font-headline text-3xl font-bold text-on-surface sm:text-4xl">{{ pageTitle }}</h1>
         <p class="mt-2 max-w-2xl text-sm text-on-surface/75 sm:text-base">
-          Construye, ajusta y optimiza tu estrategia en Standard con una experiencia visual fluida.
+          {{ pageSubtitle }}
         </p>
       </div>
 
       <div class="rounded-2xl border border-outline-variant/60 bg-surface/70 px-4 py-3 text-right">
         <div class="text-xs uppercase tracking-[0.16em] text-on-surface/60">Formato</div>
         <div class="mt-1 font-headline text-lg font-semibold text-primary">{{ deckFormatLabel }}</div>
+        <div class="mt-1 text-[11px] uppercase tracking-[0.16em] text-on-surface/55">{{ modeLabel }}</div>
       </div>
     </header>
+
+    @if (notificationMessage) {
+      <div
+        class="rounded-2xl border px-4 py-3 text-sm shadow-lg"
+        [class.border-emerald-400/40]="notificationType === 'success'"
+        [class.bg-emerald-500/10]="notificationType === 'success'"
+        [class.text-emerald-100]="notificationType === 'success'"
+        [class.border-rose-400/40]="notificationType === 'error'"
+        [class.bg-rose-500/10]="notificationType === 'error'"
+        [class.text-rose-100]="notificationType === 'error'"
+        [class.border-sky-400/40]="notificationType === 'info'"
+        [class.bg-sky-500/10]="notificationType === 'info'"
+        [class.text-sky-100]="notificationType === 'info'"
+      >
+        {{ notificationMessage }}
+      </div>
+    }
+
+    @if (loadingDeck) {
+      <div class="rounded-2xl border border-outline-variant/60 bg-surface/70 px-4 py-3 text-sm text-on-surface/75 shadow-lg">
+        Cargando mazo...
+      </div>
+    }
 
     @if (error()) {
       <div class="rounded-2xl border border-rose-400/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100 shadow-lg shadow-rose-500/10">
@@ -126,7 +150,7 @@
                               (change)="onUpdateQuantity(card.cardId, +$any($event.target).value)"
                               class="qty-input"
                               min="1"
-                              max="4"
+                              [attr.max]="getQuantityMax(card.cardType)"
                             />
                             <button (click)="onUpdateQuantity(card.cardId, card.quantity + 1)" class="qty-btn" aria-label="Aumentar cantidad">+</button>
                           </div>

@@ -3,6 +3,8 @@ package com.magicvs.backend.controller;
 import com.magicvs.backend.model.Card;
 import com.magicvs.backend.repository.CardRepository;
 import com.magicvs.backend.repository.CardSetRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -30,6 +32,7 @@ public class CardController {
 
     private static final String IMAGE_FALLBACK = "https://placehold.co/488x680/111827/e5e7eb?text=MagicVS";
     private static final Pattern COLOR_TOKEN_PATTERN = Pattern.compile("\"(W|U|B|R|G)\"");
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Autowired
     private CardRepository cardRepository;
@@ -74,9 +77,9 @@ public class CardController {
                 .searchProjectedByName(name, pageable)
                 .map(card -> new CardSearchResponse(
                         card.getId(),
-                        card.getName(),
-                        card.getManaCost() == null ? "" : card.getManaCost(),
-                        card.getTypeLine() == null ? "" : card.getTypeLine(),
+                resolveDisplayName(card.getName(), card.getRawJson()),
+                    resolveDisplayManaCost(card.getManaCost(), card.getRawJson()),
+                resolveDisplayType(card.getTypeLine(), card.getRawJson()),
                         resolveImageUrl(card.getNormalImageUri(), card.getSmallImageUri()),
                         resolveColors(card.getColorsJson(), card.getManaCost())
                 ));
@@ -143,6 +146,41 @@ public class CardController {
             }
         }
         return colors;
+    }
+
+    private static String resolveDisplayName(String defaultName, String rawJson) {
+        String localized = extractStringFromRawJson(rawJson, "printed_name");
+        return (localized != null && !localized.isBlank()) ? localized : defaultName;
+    }
+
+    private static String resolveDisplayType(String defaultTypeLine, String rawJson) {
+        String localized = extractStringFromRawJson(rawJson, "printed_type_line");
+        if (localized != null && !localized.isBlank()) {
+            return localized;
+        }
+        return defaultTypeLine == null ? "" : defaultTypeLine;
+    }
+
+    private static String resolveDisplayManaCost(String defaultManaCost, String rawJson) {
+        String localized = extractStringFromRawJson(rawJson, "printed_mana_cost");
+        if (localized != null && !localized.isBlank()) {
+            return localized;
+        }
+        return defaultManaCost == null ? "" : defaultManaCost;
+    }
+
+    private static String extractStringFromRawJson(String rawJson, String field) {
+        if (rawJson == null || rawJson.isBlank()) {
+            return null;
+        }
+
+        try {
+            JsonNode node = OBJECT_MAPPER.readTree(rawJson);
+            JsonNode value = node.get(field);
+            return (value != null && value.isTextual()) ? value.asText() : null;
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     static class CardSearchResponse {

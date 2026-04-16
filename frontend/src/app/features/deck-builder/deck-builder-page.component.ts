@@ -1,7 +1,8 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, DestroyRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterModule } from '@angular/router';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DeckBuilderService, Card, DeckCard } from '../../core/services/deck-builder.service';
 import { DeckSearchPanelComponent } from './deck-search-panel.component';
 
@@ -14,6 +15,9 @@ import { DeckSearchPanelComponent } from './deck-search-panel.component';
 })
 export class DeckBuilderPageComponent {
   private deckService = inject(DeckBuilderService);
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+  private destroyRef = inject(DestroyRef);
 
   // Signals expuestas del servicio
   deckName = this.deckService.deckName;
@@ -26,6 +30,13 @@ export class DeckBuilderPageComponent {
   validationMessage = this.deckService.validationMessage;
   loading = this.deckService.loading;
   error = this.deckService.error;
+
+  isEditing = false;
+  editingDeckId: number | null = null;
+  loadingDeck = false;
+  notificationMessage: string | null = null;
+  notificationType: 'success' | 'error' | 'info' = 'success';
+  private notificationTimer?: number;
 
   readonly deckFormatLabel = 'Standard';
 
@@ -66,10 +77,55 @@ export class DeckBuilderPageComponent {
   readonly maxCurveValue = computed(() => Math.max(1, ...this.manaCurve().map((bucket) => bucket.value)));
 
   readonly deckGoal = 60;
+
+  get pageTitle(): string {
+    return this.isEditing ? 'Editor de Mazos' : 'Creador de Mazos';
+  }
+
+  get pageSubtitle(): string {
+    return this.isEditing
+      ? 'Carga un mazo existente, ajusta su lista y guarda los cambios manteniendo la estética premium.'
+      : 'Construye, ajusta y optimiza tu estrategia en Standard con una experiencia visual fluida.';
+  }
+
+  get modeLabel(): string {
+    return this.isEditing ? 'Edición' : 'Creación';
+  }
+
   readonly deckProgressPercent = computed(() => {
     const ratio = (this.totalCards() / this.deckGoal) * 100;
     return Math.max(0, Math.min(100, ratio));
   });
+
+  constructor() {
+    this.route.paramMap
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((params) => {
+        const rawDeckId = params.get('deckId');
+        if (!rawDeckId) {
+          this.isEditing = false;
+          this.editingDeckId = null;
+          this.deckService.clearDeck();
+          return;
+        }
+
+        const deckId = Number(rawDeckId);
+        if (Number.isNaN(deckId)) {
+          this.showNotification('El mazo solicitado no es válido.', 'error');
+          return;
+        }
+
+        this.isEditing = true;
+        this.editingDeckId = deckId;
+        this.loadDeck(deckId);
+      });
+
+    const navigationState = history.state as { notificationMessage?: string; notificationType?: 'success' | 'error' | 'info' };
+    if (navigationState?.notificationMessage) {
+      this.showNotification(navigationState.notificationMessage, navigationState.notificationType || 'success');
+      history.replaceState({}, document.title);
+    }
+  }
 
   onNameChange(value: string): void {
     this.deckService.setDeckName(value);
@@ -97,16 +153,36 @@ export class DeckBuilderPageComponent {
 
   saveDeck(): void {
     if (!this.isValidDeck()) {
+      this.showNotification('El mazo debe tener exactamente 60 cartas.', 'error');
       return;
     }
 
-    this.deckService.saveDeck().subscribe({
+    const save$ = this.editingDeckId != null
+      ? this.deckService.saveDeck(this.editingDeckId)
+      : this.deckService.saveDeck();
+
+    save$.subscribe({
       next: (response) => {
-        console.log('Mazo guardado:', response);
-        // Aquí puedes navegar o mostrar un mensaje de éxito
+        const deckId = response?.id ?? this.editingDeckId;
+        this.showNotification(
+          this.editingDeckId != null ? 'Cambios guardados correctamente.' : 'Mazo creado correctamente.',
+          'success'
+        );
+
+        if (deckId != null && this.editingDeckId == null) {
+          this.editingDeckId = deckId;
+          this.isEditing = true;
+          this.router.navigate(['/decks', deckId, 'edit'], {
+            replaceUrl: true,
+            state: {
+              notificationMessage: 'Mazo creado correctamente.',
+              notificationType: 'success'
+            }
+          });
+        }
       },
       error: (error) => {
-        console.error('Error saving deck:', error);
+        this.showNotification(error?.error?.message || 'Error saving deck', 'error');
       }
     });
   }
@@ -115,6 +191,40 @@ export class DeckBuilderPageComponent {
     if (confirm('¿Estás seguro de que quieres limpiar el mazo?')) {
       this.deckService.clearDeck();
     }
+  }
+
+  getQuantityMax(cardType: string): number {
+    return this.deckService.isBasicLandType(cardType) ? 99 : 4;
+  }
+
+  private loadDeck(deckId: number): void {
+    this.loadingDeck = true;
+    this.deckService.clearDeck();
+    this.deckService.getDeckById(deckId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (deck) => {
+          this.deckService.loadDeck(deck);
+          this.loadingDeck = false;
+        },
+        error: (error) => {
+          this.loadingDeck = false;
+          this.showNotification(error?.error?.message || 'No se pudo cargar el mazo.', 'error');
+        }
+      });
+  }
+
+  private showNotification(message: string, type: 'success' | 'error' | 'info'): void {
+    this.notificationMessage = message;
+    this.notificationType = type;
+
+    if (this.notificationTimer) {
+      window.clearTimeout(this.notificationTimer);
+    }
+
+    this.notificationTimer = window.setTimeout(() => {
+      this.notificationMessage = null;
+    }, 3200);
   }
 
   getColorClass(color: string): string {

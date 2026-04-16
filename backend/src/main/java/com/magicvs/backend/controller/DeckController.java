@@ -31,13 +31,35 @@ public class DeckController {
         @RequestBody CreateDeckDTO deckDTO
     ) {
         Long userId = extractUserIdFromAuthorization(authorization);
-        DeckResponseDTO response = deckService.createDeck(userId, deckDTO);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        try {
+            DeckResponseDTO response = deckService.createDeck(userId, deckDTO);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage());
+        }
+    }
+
+    @PutMapping("/{deckId}")
+    public ResponseEntity<DeckResponseDTO> updateDeck(
+        @PathVariable Long deckId,
+        @RequestHeader(value = "Authorization", required = false) String authorization,
+        @RequestBody CreateDeckDTO deckDTO
+    ) {
+        Long userId = extractUserIdFromAuthorization(authorization);
+        try {
+            return ResponseEntity.ok(deckService.updateDeck(deckId, userId, deckDTO));
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage());
+        }
     }
 
     @GetMapping("/{deckId}")
-    public ResponseEntity<DeckResponseDTO> getDeck(@PathVariable Long deckId) {
-        return ResponseEntity.ok(deckService.getDeckById(deckId));
+    public ResponseEntity<DeckResponseDTO> getDeck(
+        @PathVariable Long deckId,
+        @RequestHeader(value = "Authorization", required = false) String authorization
+    ) {
+        Long userId = extractUserIdFromAuthorization(authorization);
+        return ResponseEntity.ok(deckService.getDeckById(deckId, userId));
     }
 
     @GetMapping("/user/me")
