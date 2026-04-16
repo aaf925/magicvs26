@@ -1,0 +1,8 @@
+:host {
+  display: block;
+}
+
+// Any specific styles for the security bar transitions if Tailwind isn't enough
+.security-bar-transition {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}

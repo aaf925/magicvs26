@@ -35,6 +35,9 @@ public class PendingRegistration {
     @Column(name = "attempts")
     private Integer attempts = 0;
 
+    @Column(name = "google_id", length = 255)
+    private String googleId;
+
     public PendingRegistration() {
     }
 
@@ -105,5 +108,13 @@ public class PendingRegistration {
 
     public void setAttempts(Integer attempts) {
         this.attempts = attempts;
+    }
+
+    public String getGoogleId() {
+        return googleId;
+    }
+
+    public void setGoogleId(String googleId) {
+        this.googleId = googleId;
     }
 }

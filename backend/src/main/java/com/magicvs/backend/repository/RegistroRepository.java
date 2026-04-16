@@ -10,4 +10,10 @@ public interface RegistroRepository extends JpaRepository<User, Long> {
     boolean existsByEmail(String email);
 
     boolean existsByFriendTag(String friendTag);
+
+    java.util.Optional<User> findByGoogleId(String googleId);
+
+    java.util.Optional<User> findByEmail(String email);
+
+    java.util.Optional<User> findByUsername(String username);
 }

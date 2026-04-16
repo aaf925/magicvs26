@@ -6,6 +6,8 @@ import { Router } from '@angular/router';
 import { finalize } from 'rxjs/operators';
 import { ChangeDetectorRef, NgZone } from '@angular/core';
 import { isValidUsername, isValidEmail, isValidPassword, sanitizeDisplayName, containsMaliciousPayload, isValidDisplayName } from '../../shared/validation';
+import { GoogleAuthService } from '../../core/services/google-auth.service';
+import { OnInit } from '@angular/core';
 
 @Component({
   selector: 'app-registro',
@@ -13,7 +15,7 @@ import { isValidUsername, isValidEmail, isValidPassword, sanitizeDisplayName, co
   templateUrl: './registro.html',
   styleUrl: './registro.scss',
 })
-export class Registro {
+export class Registro implements OnInit {
   username = '';
   email = '';
   password = '';
@@ -24,7 +26,35 @@ export class Registro {
 
   private readonly apiUrlInitiate = 'http://localhost:8080/api/users/register/initiate';
 
-  constructor(private http: HttpClient, private router: Router, private cdr: ChangeDetectorRef, private ngZone: NgZone) {}
+  constructor(
+    private http: HttpClient, 
+    private router: Router, 
+    private cdr: ChangeDetectorRef, 
+    private ngZone: NgZone,
+    private googleAuth: GoogleAuthService
+  ) {}
+
+  ngOnInit(): void {
+    // 1. Verificamos si venimos de una redirección de Google
+    this.checkGoogleRedirect();
+  }
+
+  private checkGoogleRedirect() {
+    const hash = window.location.hash;
+    if (hash && hash.includes('id_token=')) {
+      const params = new URLSearchParams(hash.replace('#', '?'));
+      const idToken = params.get('id_token');
+      if (idToken) {
+        // Limpiamos la URL para que no quede el token expuesto en el historial
+        window.history.replaceState({}, document.title, window.location.pathname);
+        this.googleAuth.handleRedirectResult(idToken);
+      }
+    }
+  }
+
+  onGoogleRegistro() {
+    this.googleAuth.loginWithGoogleRedirect('register');
+  }
 
   onSubmit(): void {
     this.message = null;

@@ -6,6 +6,9 @@ import { finalize, timeout } from 'rxjs/operators';
 import { ChangeDetectorRef, NgZone } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { isValidEmail } from '../../shared/validation';
+import { GoogleAuthService } from '../../core/services/google-auth.service';
+import { OnInit, OnDestroy } from '@angular/core';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-login',
@@ -13,12 +16,24 @@ import { isValidEmail } from '../../shared/validation';
   templateUrl: './login.html',
   styleUrl: './login.scss',
 })
-export class Login {
+export class Login implements OnInit {
   usernameOrEmail = '';
   password = '';
   message: string | null = null;
   error: string | null = null;
   loading = false;
+  
+  // Password Recovery
+  showForgotModal = false;
+  forgotEmail = '';
+  forgotLoading = false;
+  forgotMessage: string | null = null;
+  forgotError: string | null = null;
+
+  // Google Registration Prompt
+  showRegisterModal = false;
+  googleDataForPrompt: any = null;
+  private googleSub?: Subscription;
 
   private readonly apiUrl = 'http://localhost:8080/api/users/login';
 
@@ -28,8 +43,104 @@ export class Login {
     private router: Router,
     private route: ActivatedRoute,
     private cdr: ChangeDetectorRef,
-    private ngZone: NgZone
+    private ngZone: NgZone,
+    private googleAuth: GoogleAuthService
   ) {}
+
+  ngOnInit() {
+    // 1. Verificamos si venimos de una redirección de Google
+    this.checkGoogleRedirect();
+
+    this.googleSub = this.googleAuth.showRegisterPrompt$.subscribe(data => {
+      this.ngZone.run(() => {
+        this.googleDataForPrompt = data;
+        this.showRegisterModal = true;
+        this.cdr.detectChanges();
+      });
+    });
+  }
+
+  private checkGoogleRedirect() {
+    const hash = window.location.hash;
+    if (hash && hash.includes('id_token=')) {
+      const params = new URLSearchParams(hash.replace('#', '?'));
+      const idToken = params.get('id_token');
+      if (idToken) {
+        // Limpiamos la URL para que no quede el token expuesto en el historial
+        window.history.replaceState({}, document.title, window.location.pathname);
+        this.googleAuth.handleRedirectResult(idToken);
+      }
+    }
+  }
+
+  onGoogleLogin() {
+    this.googleAuth.loginWithGoogleRedirect('login');
+  }
+
+  ngOnDestroy() {
+    this.googleSub?.unsubscribe();
+  }
+
+  proceedToRegister() {
+    this.showRegisterModal = false;
+    this.router.navigate(['/register/confirm'], { 
+      state: { googleData: this.googleDataForPrompt } 
+    });
+  }
+
+  cancelRegisterPrompt() {
+    this.showRegisterModal = false;
+    this.googleDataForPrompt = null;
+  }
+
+  // Password Recovery Methods
+  openForgotModal() {
+    this.showForgotModal = true;
+    this.forgotEmail = this.usernameOrEmail.includes('@') ? this.usernameOrEmail : '';
+    this.forgotError = null;
+    this.forgotMessage = null;
+  }
+
+  closeForgotModal() {
+    this.showForgotModal = false;
+  }
+
+  sendForgotEmail() {
+    this.forgotMessage = null;
+    this.forgotError = null;
+
+    if (!this.forgotEmail || !isValidEmail(this.forgotEmail.trim())) {
+      this.forgotError = 'Introduce un email válido.';
+      return;
+    }
+
+    this.forgotLoading = true;
+    this.http.post<any>('http://localhost:8080/api/password/forgot', { email: this.forgotEmail.trim() })
+      .pipe(
+        timeout(10000),
+        finalize(() => {
+          this.ngZone.run(() => {
+            this.forgotLoading = false;
+            this.cdr.detectChanges();
+          });
+        })
+      )
+      .subscribe({
+        next: (res) => {
+          this.ngZone.run(() => {
+            this.forgotMessage = res.message;
+            this.cdr.detectChanges();
+            setTimeout(() => this.closeForgotModal(), 4000);
+          });
+        },
+        error: (err) => {
+          this.ngZone.run(() => {
+            this.forgotError = err.error?.message || 'Error al enviar el email. Intenta más tarde.';
+            this.cdr.detectChanges();
+          });
+        }
+      });
+  }
 
   onSubmit(): void {
     this.message = null;

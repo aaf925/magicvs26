@@ -1,0 +1,73 @@
+<section class="relative pt-32 pb-20 min-h-[870px] flex items-center justify-center">
+  <div class="max-w-md w-full bg-surface-container-high/60 border border-outline-variant/20 rounded-2xl p-8 shadow-2xl shadow-purple-900/30 backdrop-blur-xl">
+    
+    <h1 class="text-3xl font-headline font-bold text-white mb-6 text-center">¡Casi listo!</h1>
+    <p class="text-on-surface-variant text-sm mb-8 text-center px-4">
+      Para terminar tu registro con Google, elige cómo quieres que te vean los demás caminantes.
+    </p>
+
+    <form class="space-y-6" (ngSubmit)="onSubmit()">
+
+      <!-- EMAIL (BLOCKED) -->
+      <div class="space-y-2 opacity-60">
+        <label class="block text-xs font-semibold tracking-wider uppercase text-zinc-400">Email Verificado</label>
+        <div class="flex items-center gap-2 h-11 rounded-md bg-surface-container/50 border border-outline-variant/20 px-3 text-sm text-zinc-400">
+          <span class="material-symbols-outlined text-sm">verified</span>
+          {{ email }}
+        </div>
+      </div>
+
+      <!-- USERNAME (PRE-FILLED / EDITABLE) -->
+      <div class="space-y-2">
+        <label class="block text-xs font-semibold tracking-wider uppercase text-zinc-400">ID de Usuario</label>
+        <input
+          type="text"
+          name="username"
+          [(ngModel)]="username"
+          class="w-full h-11 rounded-md bg-surface-container/80 border border-outline-variant/40 px-3 text-sm text-zinc-100 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
+          required
+        />
+        <p class="text-[10px] text-zinc-500 italic">Este será tu identificador único para amigos.</p>
+      </div>
+
+      <!-- DISPLAY NAME -->
+      <div class="space-y-2">
+        <label class="block text-xs font-semibold tracking-wider uppercase text-zinc-400">Apodo Público (Opcional)</label>
+        <input
+          type="text"
+          name="displayName"
+          [(ngModel)]="displayName"
+          class="w-full h-11 rounded-md bg-surface-container/80 border border-outline-variant/40 px-3 text-sm text-zinc-100 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
+          placeholder="Tu nombre en combate"
+        />
+      </div>
+
+      <!-- INFO BOX -->
+      <div class="bg-purple-900/20 border border-purple-500/30 rounded-lg p-4 flex gap-3">
+        <span class="material-symbols-outlined text-purple-400">info</span>
+        <p class="text-[11px] text-purple-200 leading-relaxed">
+          Al hacer clic, te enviaremos un **código de activación** a tu correo para finalizar la creación de tu cuenta.
+        </p>
+      </div>
+
+      <!-- ERROR MESSAGE -->
+      @if (error) {
+        <p class="text-red-400 text-xs text-center font-bold uppercase tracking-tighter">{{ error }}</p>
+      }
+
+      <!-- BUTTON -->
+      <button
+        type="submit"
+        [disabled]="loading || !isFormValid"
+        class="w-full py-3.5 rounded-md bg-purple-600 text-white font-bold tracking-wider uppercase text-sm shadow-lg shadow-purple-900/40 hover:bg-purple-500 transition-all disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed mt-4"
+      >
+        @if (!loading) {
+          <span>Enviar Código y Registrar</span>
+        } @else {
+          <span class="material-symbols-outlined animate-spin text-xl">progress_activity</span>
+        }
+      </button>
+
+    </form>
+  </div>
+</section>

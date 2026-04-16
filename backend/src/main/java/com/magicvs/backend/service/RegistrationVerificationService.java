@@ -38,7 +38,7 @@ public class RegistrationVerificationService {
         this.mailSender = mailSender;
     }
 
-    public PendingRegistration initiate(String username, String email, String rawPassword, String displayName) {
+    public PendingRegistration initiate(String username, String email, String rawPassword, String displayName, String googleId) {
         String normalizedUsername = username.trim();
         String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
 
@@ -74,6 +74,7 @@ public class RegistrationVerificationService {
         pr.setDisplayName(ValidationUtils.sanitizeDisplayName(displayName != null ? displayName : ""));
         pr.setVerificationHash(codeHash);
         pr.setExpiresAt(LocalDateTime.now().plusMinutes(15));
+        pr.setGoogleId(googleId);
 
         PendingRegistration saved = pendingRepo.save(pr);
 
@@ -87,7 +88,7 @@ public class RegistrationVerificationService {
             helper.setFrom(fromAddress);
             helper.setSubject("⚔️ ¡Ya casi estás! Tu código de activación para MagicVS");
 
-            String formattedCode = code.substring(0, 3) + "-" + code.substring(3);
+            String formattedCode = code;
 
             String htmlContent = "<!DOCTYPE html><html><head>" +
                     "<meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'>" +
@@ -163,6 +164,7 @@ public class RegistrationVerificationService {
         user.setPasswordHash(pr.getPasswordHash());
         user.setDisplayName(pr.getDisplayName().isBlank() ? pr.getUsername() : pr.getDisplayName());
         user.setFriendTag(generateFriendTag());
+        user.setGoogleId(pr.getGoogleId());
 
         User savedUser = registroRepository.save(user);
         pendingRepo.delete(pr);

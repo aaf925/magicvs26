@@ -1,0 +1,152 @@
+<main class="pt-32 pb-20 px-8 max-w-7xl mx-auto">
+  <!-- Header Section -->
+  <section class="mb-12 flex flex-col xl:flex-row xl:items-end justify-between gap-6">
+    <div>
+      <h2 class="text-4xl font-headline font-bold text-on-surface uppercase tracking-tighter mb-2">Directorio de Invocadores</h2>
+      <p class="text-zinc-500 font-body max-w-md">Analiza a tus rivales, encuentra compañeros de gremio y escala en el ranking global.</p>
+    </div>
+    
+    <div class="flex flex-col md:flex-row items-center gap-4 w-full xl:w-auto">
+      <!-- Search Field with Premium Style -->
+      <div class="relative w-full md:w-80 group">
+        <div class="absolute inset-0 bg-primary/20 blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500"></div>
+        <div class="relative flex items-center">
+          <span class="material-symbols-outlined absolute left-4 text-zinc-500 text-lg group-focus-within:text-primary transition-colors">search</span>
+          <input type="text" 
+                 (input)="updateSearch($event)"
+                 [value]="searchTerm()"
+                 placeholder="Buscar invocador..." 
+                 class="w-full bg-zinc-900/60 backdrop-blur-xl border border-white/10 text-on-surface rounded-2xl pl-12 pr-4 py-3 text-sm font-body focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all outline-none shadow-2xl">
+        </div>
+      </div>
+
+      <!-- Filters & Sort with Premium Style -->
+      <div class="flex items-center gap-3 w-full md:w-auto justify-end">
+        <div class="relative flex-1 md:flex-none group">
+          <select (change)="onSortChange($event)"
+                  class="w-full appearance-none bg-zinc-900/60 backdrop-blur-xl border border-white/10 text-on-surface-variant rounded-2xl pl-5 pr-12 py-3 text-xs font-headline uppercase tracking-widest focus:border-secondary/50 focus:ring-4 focus:ring-secondary/10 transition-all cursor-pointer outline-none shadow-2xl">
+            <option value="elo" [selected]="sortBy() === 'elo'">ELO (Rating)</option>
+            <option value="username" [selected]="sortBy() === 'username'">Alfabético</option>
+          </select>
+          <span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-secondary pointer-events-none group-hover:translate-y-[-40%] transition-transform">unfold_more</span>
+        </div>
+
+        <button (click)="toggleSortOrder()" 
+                class="relative overflow-hidden bg-zinc-900/60 backdrop-blur-xl border border-white/10 text-secondary p-3 rounded-2xl transition-all active:scale-90 shadow-2xl group"
+                [title]="sortOrder() === 'asc' ? 'Ascendente' : 'Descendente'">
+          <div class="absolute inset-0 bg-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+          <span class="material-symbols-outlined relative z-10 transition-transform duration-500 flex"
+                [style.transform]="sortOrder() === 'desc' ? 'rotate(180deg)' : 'rotate(0deg)'">
+            straight
+          </span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Player Grid -->
+  <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+    @if (isLoading()) {
+      <!-- Skeleton Loading states -->
+      @for (i of [1, 2, 3, 4, 5, 6, 7, 8]; track i) {
+        <div class="bg-surface-container-low p-6 rounded-xl animate-pulse">
+          <div class="flex items-center gap-4">
+            <div class="w-16 h-16 rounded-full bg-surface-container-high"></div>
+            <div class="flex-1 space-y-2">
+              <div class="h-4 bg-surface-container-high rounded w-3/4"></div>
+              <div class="h-3 bg-surface-container-high rounded w-1/2"></div>
+            </div>
+          </div>
+          <div class="mt-8 flex justify-between items-end">
+            <div class="space-y-2 flex-1 mr-4">
+              <div class="h-2 bg-surface-container-high rounded w-1/4"></div>
+              <div class="h-3 bg-surface-container-high rounded w-1/2"></div>
+            </div>
+            <div class="w-10 h-10 bg-surface-container-high rounded-lg"></div>
+          </div>
+        </div>
+      }
+    } @else {
+      @for (user of filteredUsers(); track user.id) {
+        <!-- Summoner Card -->
+        <div class="glass-panel p-6 rounded-xl group hover:bg-zinc-800/40 transition-all duration-500 cursor-pointer relative overflow-hidden"
+             [routerLink]="[]">
+          <div class="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 blur-[60px] group-hover:bg-purple-500/10 transition-all"></div>
+          <div class="flex items-center gap-4 relative z-10">
+            <div class="relative">
+              <app-avatar [username]="user.username" [avatarUrl]="user.avatarUrl"></app-avatar>
+              <div class="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 border-4 border-surface rounded-full"></div>
+            </div>
+            <div>
+              <h3 class="font-headline font-bold text-lg text-white group-hover:text-primary transition-colors uppercase">{{ user.username }}</h3>
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] font-headline uppercase tracking-tighter text-tertiary-fixed bg-tertiary/10 px-2 py-0.5 rounded">
+                  ELO: {{ user.elo }}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="mt-6 flex justify-between items-end relative z-10">
+            <div class="space-y-1">
+              <p class="text-[10px] font-headline text-zinc-500 uppercase tracking-widest">Estado</p>
+              <p class="text-xs font-body text-secondary">Invocador Activo</p>
+            </div>
+            
+            <div class="flex items-center gap-2">
+              <!-- Add Friend / Follow Button (Visual only) -->
+              @if (user.id !== currentUserId()) {
+                <button (click)="toggleFollow(user.id); $event.stopPropagation()"
+                        class="flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-300 active:scale-75 follow-btn shadow-lg"
+                        [class.is-following]="isFollowing(user.id)"
+                        [title]="isFollowing(user.id) ? 'Dejar de seguir' : 'Agregar amigo'">
+                  <span class="material-symbols-outlined text-[20px]">
+                    {{ isFollowing(user.id) ? 'person_remove' : 'person_add' }}
+                  </span>
+                </button>
+              }
+
+              <button class="flex items-center justify-center w-10 h-10 bg-surface-container-high hover:bg-secondary text-white rounded-xl transition-all active:scale-90 shadow-lg border border-white/5 group">
+                <span class="material-symbols-outlined text-[20px] group-hover:scale-110 transition-transform">visibility</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+    }
+  </section>
+
+  <!-- Empty State Section -->
+  @if (!isLoading() && filteredUsers().length === 0) {
+    <section class="mt-24 py-20 flex flex-col items-center justify-center border-t border-white/5 text-center">
+      <div class="w-20 h-20 bg-surface-container rounded-full flex items-center justify-center mb-6">
+        <span class="material-symbols-outlined text-4xl text-zinc-600">person_search</span>
+      </div>
+      <h3 class="text-xl font-headline font-bold text-on-surface uppercase tracking-widest mb-2">
+        {{ searchTerm() ? 'No hay coincidencias' : 'Sin resultados' }}
+      </h3>
+      <p class="text-zinc-500 font-body max-w-sm mb-8">
+        {{ searchTerm() ? 'No hemos encontrado invocadores que coincidan con "' + searchTerm() + '".' : 'No se encontraron invocadores en la base de datos.' }}
+      </p>
+      @if (searchTerm()) {
+        <button (click)="searchTerm.set('')" class="bg-primary/10 border border-primary/20 text-primary px-8 py-3 rounded-lg font-headline text-xs font-bold uppercase tracking-widest hover:bg-primary/20 transition-all">
+          Limpiar búsqueda
+        </button>
+      } @else {
+        <button (click)="loadUsers()" class="bg-primary/10 border border-primary/20 text-primary px-8 py-3 rounded-lg font-headline text-xs font-bold uppercase tracking-widest hover:bg-primary/20 transition-all">
+          Reintentar
+        </button>
+      }
+    </section>
+  }
+
+  @if (hasError()) {
+    <section class="mt-12 p-8 glass-panel border border-red-500/20 text-center rounded-2xl">
+      <span class="material-symbols-outlined text-red-400 text-4xl mb-4">error</span>
+      <h3 class="text-lg font-headline font-bold text-white uppercase mb-2">Error de Sincronización</h3>
+      <p class="text-zinc-400 text-sm mb-6">No se pudo conectar con el servidor para obtener el directorio de invocadores.</p>
+      <button (click)="loadUsers()" class="bg-red-500/10 text-red-400 border border-red-500/20 px-6 py-2 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-red-500/20 transition-all">
+        Reintentar conexión
+      </button>
+    </section>
+  }
+</main>

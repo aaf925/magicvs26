@@ -58,6 +58,90 @@
           {{ message }}
         </p>
       }
+
+      <!-- FORGOT PASSWORD LINK -->
+      <div class="flex justify-center mt-4">
+        <a href="javascript:void(0)" 
+           (click)="openForgotModal()"
+           class="text-xs font-semibold text-purple-400 hover:text-purple-300 transition-colors uppercase tracking-wider">
+          ¿Has olvidado tu contraseña? Recupérala
+        </a>
+      </div>
+
+      <div class="relative py-4">
+        <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-outline-variant/30"></div></div>
+        <div class="relative flex justify-center text-xs uppercase"><span class="px-2 bg-[#1c1b1f] text-zinc-500">O continuar con</span></div>
+      </div>
+
+      <!-- GOOGLE BUTTON CUSTOM (100% GENERIC & FULL WIDTH) -->
+      <button 
+        type="button"
+        (click)="onGoogleLogin()"
+        class="w-full h-11 flex items-center justify-center gap-3 bg-white hover:bg-zinc-100 text-zinc-900 font-semibold rounded-md border border-zinc-300 shadow-sm transition-all overflow-hidden active:scale-[0.98]"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 48 48">
+          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24s.92 7.54 2.56 10.78l7.97-6.19z"/>
+          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+        </svg>
+        <span class="Manrope text-sm tracking-wide">Iniciar sesión con Google</span>
+      </button>
+      </div>
+  </div>
+
+  <!-- REGISTRATION PROMPT MODAL -->
+  <div *ngIf="showRegisterModal" 
+       class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-all duration-300 animate-in fade-in">
+    <!-- ... existing modal content ... -->
+  </div>
+
+  <!-- PASSWORD RECOVERY MODAL (PREMIUM GLASSMORPISM) -->
+  <div *ngIf="showForgotModal" 
+       class="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md transition-all duration-300 animate-in fade-in">
+    
+    <div class="max-w-md w-full bg-surface-container-high/40 border border-purple-500/30 rounded-2xl p-8 shadow-2xl shadow-purple-900/50 backdrop-blur-2xl ring-1 ring-white/10 animate-in zoom-in-95 duration-300">
+      
+      <div class="flex flex-col items-center text-center mb-6">
+        <div class="w-16 h-16 rounded-full bg-purple-600/20 flex items-center justify-center mb-4 border border-purple-500/40">
+          <span class="material-symbols-outlined text-4xl text-purple-400">key</span>
+        </div>
+        <h2 class="text-2xl font-headline font-bold text-white mb-2">Recuperar Acceso</h2>
+        <p class="text-on-surface-variant text-sm leading-relaxed">
+          Introduce tu email y te enviaremos un enlace mágico para restablecer tu contraseña.
+        </p>
+      </div>
+
+      <div class="space-y-4 mb-8">
+        <div class="space-y-2">
+          <label class="block text-xs font-semibold tracking-wider uppercase text-zinc-400 text-left">EMAIL DE LA CUENTA</label>
+          <input
+            type="email"
+            [(ngModel)]="forgotEmail"
+            class="w-full h-11 rounded-md bg-surface-container/60 border border-outline-variant/40 px-4 text-sm text-zinc-100 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
+            placeholder="magicvs@gmail.com"
+          />
+        </div>
+
+        @if (forgotError) {
+          <p class="text-red-400 text-xs text-center animate-pulse">{{ forgotError }}</p>
+        }
+        @if (forgotMessage) {
+          <p class="text-emerald-400 text-xs text-center">{{ forgotMessage }}</p>
+        }
+      </div>
+
+      <div class="flex flex-col gap-3">
+        <button (click)="sendForgotEmail()" 
+                [disabled]="forgotLoading"
+                class="w-full py-3.5 rounded-lg bg-purple-600 text-white font-bold tracking-wider uppercase text-sm shadow-lg shadow-purple-900/40 hover:bg-purple-500 hover:-translate-y-0.5 transition-all disabled:opacity-50">
+          @if (!forgotLoading) { Enviar Código } @else { Procesando... }
+        </button>
+        <button (click)="closeForgotModal()" 
+                class="w-full py-3.5 rounded-lg bg-transparent border border-outline-variant/30 text-zinc-300 font-bold tracking-wider uppercase text-sm hover:bg-white/5 transition-all">
+          Volver
+        </button>
+      </div>
     </div>
   </div>
-</section>
+</section>
