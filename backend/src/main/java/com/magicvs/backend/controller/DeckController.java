@@ -25,19 +25,13 @@ public class DeckController {
         this.authService = authService;
     }
 
-    @PostMapping
-    public ResponseEntity<DeckResponseDTO> createDeck(
-        @RequestHeader(value = "Authorization", required = false) String authorization,
-        @RequestBody CreateDeckDTO deckDTO
-    ) {
-        Long userId = extractUserIdFromAuthorization(authorization);
-        try {
-            DeckResponseDTO response = deckService.createDeck(userId, deckDTO);
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (IllegalArgumentException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage());
-        }
-    }
+@PostMapping
+public ResponseEntity<DeckResponseDTO> createDeck(
+    @RequestHeader(name = "Authorization") String authorization, 
+    @RequestBody CreateDeckDTO deckDTO
+) {
+    return ResponseEntity.status(HttpStatus.CREATED).body(deckService.createDeck(authorization, deckDTO));
+}
 
     @PutMapping("/{deckId}")
     public ResponseEntity<DeckResponseDTO> updateDeck(
@@ -94,13 +88,13 @@ public class DeckController {
         return authService.getUserId(token)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token inválido"));
     }
-    @PostMapping("/{id}/copy")
+@PostMapping("/{id}/copy")
 public ResponseEntity<DeckResponseDTO> copyDeck(
     @PathVariable Long id,
-    @RequestHeader(value = "Authorization", required = false) String authorization
+    @RequestHeader(name = "Authorization") String authorization
 ) {
-    Long userId = extractUserIdFromAuthorization(authorization);
-    DeckResponseDTO response = deckService.copyDeck(id, userId);
+    
+    DeckResponseDTO response = deckService.copyDeck(id, authorization);
     return ResponseEntity.status(HttpStatus.CREATED).body(response);
 }
 }
