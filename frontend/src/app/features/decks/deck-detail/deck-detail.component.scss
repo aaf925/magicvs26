@@ -14,9 +14,41 @@
   transform: scale(1.1);
 }
 
-// Mana Curve Glow
-.group:hover .group-hover\:opacity-60 {
-  filter: drop-shadow(0 0 8px var(--primary-color, #ecb2ff));
+// Mana Curve Styles
+.curve-bar {
+  min-height: 8px;
+  transition: height 0.3s ease, filter 0.2s ease;
+}
+
+.curve-bucket {
+  position: relative;
+
+  &:hover .curve-bar {
+    filter: brightness(1.12);
+  }
+
+  &:hover .curve-tooltip {
+    opacity: 1;
+    transform: translate(-50%, -4px);
+  }
+}
+
+.curve-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translate(-50%, 0);
+  white-space: nowrap;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(19, 19, 19, 0.96);
+  color: #e5e2e1;
+  border-radius: 8px;
+  font-size: 10px;
+  padding: 4px 7px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 20;
 }
 
 // Custom scrollbar for better look

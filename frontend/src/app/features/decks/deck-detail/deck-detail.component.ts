@@ -19,6 +19,7 @@ export class DeckDetailComponent implements OnInit {
   deck = signal<Deck | null>(null);
   isLoading = signal(true);
   error = signal<string | null>(null);
+  currentUserId = signal<number | null>(null);
 
   readonly groupedCards = computed(() => {
     const d = this.deck();
@@ -40,7 +41,7 @@ export class DeckDetailComponent implements OnInit {
 
   readonly manaCurve = computed(() => {
     const d = this.deck();
-    if (!d) return [];
+    if (!d || !d.cards) return [];
     
     const buckets = [0, 0, 0, 0, 0, 0, 0, 0];
     d.cards.forEach(card => {
@@ -49,21 +50,34 @@ export class DeckDetailComponent implements OnInit {
       buckets[index] += card.quantity;
     });
 
-    const max = Math.max(1, ...buckets);
     return buckets.map((value, index) => ({
       label: index === 7 ? '7+' : String(index),
-      value,
-      percent: (value / max) * 100
+      value
     }));
   });
 
+  readonly maxCurveValue = computed(() => Math.max(1, ...this.manaCurve().map(b => b.value)));
+
   ngOnInit(): void {
+    this.loadCurrentUserId();
     this.route.params.subscribe(params => {
       const id = params['id'];
       if (id) {
         this.loadDeck(Number(id));
       }
     });
+  }
+
+  loadCurrentUserId(): void {
+    const raw = localStorage.getItem('user');
+    if (raw) {
+      try {
+        const u = JSON.parse(raw);
+        this.currentUserId.set(u.id);
+      } catch (e) {
+        console.error('Error parsing stored user:', e);
+      }
+    }
   }
 
   loadDeck(id: number): void {
@@ -80,6 +94,13 @@ export class DeckDetailComponent implements OnInit {
     this.location.back();
   }
 
+  getCurveBarHeight(value: number): number {
+    if (value <= 0) return 4;
+    const maxValue = this.maxCurveValue();
+    const maxBarHeight = 64; // Estándar del creador
+    return Math.max(8, Math.round((value / maxValue) * maxBarHeight));
+  }
+
   private resolveTypeGroup(typeLine: string): string {
     const normalized = (typeLine || '').toLowerCase();
     if (normalized.includes('creature') || normalized.includes('criatura')) return 'Criaturas';
@@ -94,13 +115,15 @@ export class DeckDetailComponent implements OnInit {
 
   private extractManaValue(manaCost: string): number {
     if (!manaCost) return 0;
+    
     let total = 0;
     const symbols = manaCost.match(/\{([^}]+)\}/g) || [];
     symbols.forEach(symbol => {
       const value = symbol.replace(/[{}]/g, '');
       if (/^\d+$/.test(value)) total += Number(value);
-      else total += 1;
+      else total += 1; // Simplificado como en el creador
     });
+
     return total;
   }
 }

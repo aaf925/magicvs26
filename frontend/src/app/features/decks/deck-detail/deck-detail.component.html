@@ -1,4 +1,4 @@
-<div class="min-h-screen bg-zinc-950 flex flex-col relative overflow-hidden">
+<div class="min-h-screen bg-zinc-950 flex flex-col relative overflow-hidden pt-20">
   <!-- Background Ambient Glow & Main Image Backdrop -->
   <div class="absolute inset-0 pointer-events-none">
     @if (deck()?.mainImageUrl) {
@@ -11,7 +11,7 @@
   </div>
 
   <!-- Header / Navigation -->
-  <nav class="sticky top-0 z-50 bg-surface/80 backdrop-blur-xl border-b border-white/5 py-4 px-6 flex items-center justify-between">
+  <nav class="bg-surface/40 backdrop-blur-md border-b border-white/5 py-4 px-6 flex items-center justify-between">
     <div class="flex items-center gap-4">
       <button (click)="goBack()" 
               class="p-2 rounded-full hover:bg-white/5 transition-colors text-on-surface-variant hover:text-on-surface"
@@ -31,7 +31,7 @@
       </div>
     </div>
 
-    @if (deck()) {
+    @if (deck() && deck()?.userId === currentUserId()) {
       <div class="flex items-center gap-3">
         <a [routerLink]="['/decks', deck()?.id, 'edit']" 
            class="px-4 py-2 bg-primary text-on-primary rounded-xl font-bold text-sm hover:brightness-110 transition-all shadow-lg shadow-primary/20 flex items-center gap-2">
@@ -116,18 +116,21 @@
               <p class="text-sm text-on-surface-variant leading-relaxed">{{ deck()?.description || 'Sin descripción disponible.' }}</p>
             </div>
 
-            <!-- Mana Curve -->
-            <div class="mt-10 pt-8 border-t border-white/5">
-              <h3 class="text-[10px] font-label font-bold uppercase tracking-widest text-on-surface-variant mb-6">Curva de Maná</h3>
-              <div class="flex items-end justify-between h-32 gap-1.5 px-2">
+            <!-- Mana Curve Section -->
+            <div class="bg-white/5 rounded-3xl p-6 border border-white/10 mt-6">
+              <div class="flex items-center justify-between mb-6">
+                <span class="text-white/60 text-sm font-medium uppercase tracking-wider">Curva de Maná</span>
+                <span class="text-primary text-xs font-bold">COSTES CMC</span>
+              </div>
+              <div class="grid grid-cols-8 items-end gap-3 h-24">
                 @for (bin of manaCurve(); track bin.label) {
-                  <div class="flex-1 flex flex-col items-center group">
-                    <div class="w-full relative bg-primary/5 rounded-t-sm transition-all overflow-hidden" 
-                         [style.height.%]="bin.percent">
-                      <div class="absolute inset-0 bg-primary opacity-40 group-hover:opacity-60 transition-opacity"></div>
-                      <div class="absolute inset-0 bg-gradient-to-t from-white/10 to-transparent"></div>
+                  <div class="curve-bucket flex flex-col items-center gap-2 group relative">
+                    <div class="curve-tooltip">CMC {{ bin.label }}: {{ bin.value }} carta(s)</div>
+                    <div class="text-[10px] text-white/40 font-mono">{{ bin.value }}</div>
+                    <div class="curve-bar w-full rounded-t-lg bg-gradient-to-t from-primary/20 to-primary shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)] transition-all duration-500"
+                         [style.height.px]="getCurveBarHeight(bin.value)">
                     </div>
-                    <span class="text-[10px] font-mono mt-2 text-on-surface-variant group-hover:text-primary transition-colors">{{ bin.label }}</span>
+                    <div class="text-[10px] text-white/60 font-bold">{{ bin.label }}</div>
                   </div>
                 }
               </div>

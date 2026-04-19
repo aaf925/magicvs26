@@ -129,10 +129,14 @@ public class DeckService {
      */
     @Transactional(readOnly = true)
     public DeckResponseDTO getDeckById(Long deckId, Long userId) {
-        Deck deck = deckRepository.findById(deckId)
+        Deck deck = deckRepository.findByIdWithCards(deckId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Mazo no encontrado"));
 
-        ensureOwner(deck, userId);
+        boolean isOwner = userId != null && deck.getUser().getId().equals(userId);
+        if (!deck.getPublic() && !isOwner) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No tienes permiso para ver este mazo privado");
+        }
+        
         return DeckResponseDTO.fromEntity(deck);
     }
 

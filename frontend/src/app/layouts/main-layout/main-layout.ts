@@ -2,6 +2,7 @@ import { Component, signal, inject } from '@angular/core';
 import { Router, RouterOutlet, RouterLink, RouterLinkActive, NavigationEnd } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import { ProfileService, ProfileResponse } from '../../features/profile/profile.service';
+import { ToastComponent } from '../../shared/components/toast/toast.component';
 
 interface StoredUser {
   id: number;
@@ -15,7 +16,7 @@ interface StoredUser {
 
 @Component({
   selector: 'app-main-layout',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, ToastComponent],
   templateUrl: './main-layout.html',
   styleUrl: './main-layout.scss',
 })
