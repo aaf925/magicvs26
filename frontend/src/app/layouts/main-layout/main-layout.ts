@@ -1,7 +1,9 @@
-import { Component, signal, inject } from '@angular/core';
+import { Component, HostListener, inject } from '@angular/core';
 import { Router, RouterOutlet, RouterLink, RouterLinkActive, NavigationEnd } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import { ProfileService, ProfileResponse } from '../../features/profile/profile.service';
+import { NotificationService } from '../../core/services/notification.service';
+import { AppNotification, ToastNotification } from '../../models/notification.model';
 
 interface StoredUser {
   id: number;
@@ -35,6 +37,7 @@ export class MainLayout {
   ];
 
   private readonly profileService = inject(ProfileService);
+  private readonly notificationService = inject(NotificationService);
 
   constructor(private router: Router) {
     this.isLoggedIn = !!localStorage.getItem('user');
@@ -44,6 +47,7 @@ export class MainLayout {
     this.profileService.profileUpdated$.subscribe((updated: ProfileResponse) => {
       this.isLoggedIn = !!localStorage.getItem('user');
       this.loadUserFromStorage();
+      this.initializeNotifications();
     });
 
     // Re-check login state after every navigation (e.g. after login redirects to /)
@@ -52,7 +56,10 @@ export class MainLayout {
       .subscribe(() => {
         this.isLoggedIn = !!localStorage.getItem('user');
         this.loadUserFromStorage();
+        this.initializeNotifications();
       });
+
+    this.initializeNotifications();
   }
 
     goHome(): void {
@@ -64,8 +71,116 @@ export class MainLayout {
     localStorage.removeItem('token');
     localStorage.removeItem('authToken');
     this.isLoggedIn = false;
+    this.notificationService.disconnect();
+    this.notificationService.setDropdownOpen(false);
     // redirect to public home (not login)
     this.router.navigateByUrl('/');
+  }
+
+  toggleNotifications(event: MouseEvent): void {
+    event.stopPropagation();
+    this.notificationService.toggleDropdown();
+  }
+
+  markAllNotificationsAsRead(event: MouseEvent): void {
+    event.stopPropagation();
+    this.notificationService.markAllAsRead();
+  }
+
+  deleteAllNotifications(event: MouseEvent): void {
+    event.stopPropagation();
+    this.notificationService.deleteAllNotifications();
+  }
+
+  openNotification(notification: AppNotification): void {
+    if (notification.unread) {
+      this.notificationService.markAsRead(notification.id);
+    }
+
+    const target = typeof notification.data?.link === 'string' && notification.data.link.trim().length
+      ? notification.data.link
+      : '/';
+
+    this.notificationService.setDropdownOpen(false);
+    this.router.navigateByUrl(target);
+  }
+
+  deleteNotification(event: MouseEvent, notificationId: number): void {
+    event.stopPropagation();
+    this.notificationService.deleteNotification(notificationId);
+  }
+
+  dismissToast(toastId: number): void {
+    this.notificationService.dismissToast(toastId);
+  }
+
+  notificationIcon(type: string): string {
+    switch (type) {
+      case 'FRIEND_REQUEST':
+        return 'group_add';
+      case 'NEW_MESSAGE':
+        return 'chat';
+      case 'BATTLE_INVITE':
+        return 'sports_martial_arts';
+      default:
+        return 'notifications';
+    }
+  }
+
+  notificationTitle(notification: AppNotification): string {
+    const rawTitle = notification.data?.title;
+    if (typeof rawTitle === 'string' && rawTitle.trim().length) {
+      return rawTitle;
+    }
+
+    switch (notification.type) {
+      case 'FRIEND_REQUEST':
+        return 'Solicitud de amistad';
+      case 'NEW_MESSAGE':
+        return 'Nuevo mensaje';
+      case 'BATTLE_INVITE':
+        return 'Invitación a batalla';
+      default:
+        return 'Notificación';
+    }
+  }
+
+  notificationMessage(notification: AppNotification): string {
+    const rawMessage = notification.data?.message;
+    if (typeof rawMessage === 'string' && rawMessage.trim().length) {
+      return rawMessage;
+    }
+
+    return 'Tienes una actualización pendiente en MagicVS.';
+  }
+
+  toastTitle(toast: ToastNotification): string {
+    return toast.title;
+  }
+
+  toastMessage(toast: ToastNotification): string {
+    return toast.message;
+  }
+
+  get notifications(): AppNotification[] {
+    return this.notificationService.notifications();
+  }
+
+  get unreadNotificationCount(): number {
+    return this.notificationService.unreadCount();
+  }
+
+  get isNotificationDropdownOpen(): boolean {
+    return this.notificationService.dropdownOpen();
+  }
+
+  get toasts(): ToastNotification[] {
+    return this.notificationService.toasts();
+  }
+
+  @HostListener('document:click')
+  closeNotificationsOnOutsideClick(): void {
+    this.notificationService.setDropdownOpen(false);
   }
 
   private loadUserFromStorage(): void {
@@ -106,6 +221,15 @@ export class MainLayout {
       this.avatarUrl = null;
       this.manaColor = null;
     }
+  }
+
+  private initializeNotifications(): void {
+    if (this.isLoggedIn) {
+      this.notificationService.initForCurrentUser();
+      return;
+    }
+
+    this.notificationService.disconnect();
   }
 
   getInitials(): string {
