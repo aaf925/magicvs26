@@ -26,6 +26,7 @@ public interface CardRepository extends JpaRepository<Card, Long> {
         String getBackFaceSmallImageUri();
         String getColorsJson();
         String getRawJson();
+        String getRarity();
     }
 
     Optional<Card> findByScryfallId(UUID scryfallId);
@@ -46,7 +47,8 @@ public interface CardRepository extends JpaRepository<Card, Long> {
                lastFace.normalImageUri AS backFaceNormalImageUri,
                lastFace.smallImageUri AS backFaceSmallImageUri,
                c.colorsJson AS colorsJson,
-               c.rawJson AS rawJson
+               c.rawJson AS rawJson,
+               c.rarity AS rarity
         FROM Card c
         LEFT JOIN c.faces firstFace
             ON firstFace.faceOrder = (
@@ -64,19 +66,37 @@ public interface CardRepository extends JpaRepository<Card, Long> {
                 LOWER(c.name) LIKE LOWER(CONCAT('%', :name, '%'))
                 OR LOWER(c.rawJson) LIKE LOWER(CONCAT('%', :name, '%'))
                )
-           AND (
-                :colorCode = ''
-                OR UPPER(COALESCE(c.colorsJson, '[]')) LIKE CONCAT('%"', UPPER(:colorCode), '"%')
-               )
+           AND (:noColorFilter = TRUE OR (
+                (:needsW = FALSE OR UPPER(COALESCE(c.colorsJson, '[]')) LIKE '%"W"%' OR UPPER(COALESCE(c.colorIdentityJson, '[]')) LIKE '%"W"%')
+                AND (:needsU = FALSE OR UPPER(COALESCE(c.colorsJson, '[]')) LIKE '%"U"%' OR UPPER(COALESCE(c.colorIdentityJson, '[]')) LIKE '%"U"%')
+                AND (:needsB = FALSE OR UPPER(COALESCE(c.colorsJson, '[]')) LIKE '%"B"%' OR UPPER(COALESCE(c.colorIdentityJson, '[]')) LIKE '%"B"%')
+                AND (:needsR = FALSE OR UPPER(COALESCE(c.colorsJson, '[]')) LIKE '%"R"%' OR UPPER(COALESCE(c.colorIdentityJson, '[]')) LIKE '%"R"%')
+                AND (:needsG = FALSE OR UPPER(COALESCE(c.colorsJson, '[]')) LIKE '%"G"%' OR UPPER(COALESCE(c.colorIdentityJson, '[]')) LIKE '%"G"%')
+                AND (:needsC = FALSE OR (
+                    (c.colorsJson IS NULL OR c.colorsJson = '[]' OR c.colorsJson = '')
+                    AND (c.colorIdentityJson IS NULL OR c.colorIdentityJson = '[]' OR c.colorIdentityJson = '')
+                ))
+               ))
            AND (
                 :typeFilter = ''
                 OR LOWER(COALESCE(c.typeLine, '')) LIKE LOWER(CONCAT('%', :typeFilter, '%'))
                )
+           AND (
+                :rarityFilter = ''
+                OR LOWER(COALESCE(c.rarity, '')) = LOWER(:rarityFilter)
+               )
         """)
     Page<CardSearchProjection> searchProjectedByNameAndFilters(
         @Param("name") String name,
-        @Param("colorCode") String colorCode,
+        @Param("noColorFilter") boolean noColorFilter,
+        @Param("needsW") boolean needsW,
+        @Param("needsU") boolean needsU,
+        @Param("needsB") boolean needsB,
+        @Param("needsR") boolean needsR,
+        @Param("needsG") boolean needsG,
+        @Param("needsC") boolean needsC,
         @Param("typeFilter") String typeFilter,
+        @Param("rarityFilter") String rarityFilter,
         Pageable pageable
     );
 

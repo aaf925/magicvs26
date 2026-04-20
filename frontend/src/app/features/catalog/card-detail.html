@@ -9,16 +9,16 @@
     </a>
   </nav>
 
-  <div class="grid grid-cols-1 md:grid-cols-12 gap-16 items-start">
+  <div class="grid grid-cols-1 md:grid-cols-12 gap-12 items-start">
     <!-- Left Column: Card Image -->
-    <div class="md:col-span-5 flex justify-center sticky top-8">
-      <div class="relative group">
-        <div class="absolute -inset-4 bg-primary-container/20 blur-3xl opacity-50 rounded-full"></div>
-        <img class="relative w-full max-w-[480px] rounded-[2.5rem] shadow-2xl card-glow border border-white/10"
-          [src]="card.imageUrl" [alt]="card.name" />
-        <div
-          class="absolute inset-0 rounded-[2.5rem] bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none">
-        </div>
+    <div class="md:col-span-5 flex justify-center sticky top-24">
+      <div class="relative w-full max-w-sm">
+        <img
+          [src]="card.imageUrl || defaultImageUrl"
+          [alt]="card.name"
+          class="w-full rounded-2xl shadow-2xl shadow-primary/20 hover:scale-[1.02] transition-transform duration-300"
+          (error)="$any($event.target).src = defaultImageUrl"
+        />
       </div>
     </div>
 
