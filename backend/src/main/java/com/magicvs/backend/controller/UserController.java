@@ -171,6 +171,7 @@ public class UserController {
         public Integer friendsCount;
         public Boolean isOnline;
         public String lastSeenAt;
+        public String avatarUrl;
 
         public static UserResponse fromEntity(User user) {
             UserResponse resp = new UserResponse();
@@ -183,6 +184,7 @@ public class UserController {
             resp.friendsCount = user.getFriendsCount();
             resp.isOnline = user.getIsOnline();
             resp.lastSeenAt = user.getLastSeenAt() != null ? user.getLastSeenAt().toString() : null;
+            resp.avatarUrl = user.getAvatarUrl();
             return resp;
         }
     }

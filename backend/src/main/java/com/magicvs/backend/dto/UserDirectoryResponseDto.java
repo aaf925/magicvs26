@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 public class UserDirectoryResponseDto {
     private Long id;
     private String username;
+    private String displayName;
     private Integer elo;
     private String avatarUrl;
     private boolean isOnline;
@@ -14,9 +15,10 @@ public class UserDirectoryResponseDto {
 
     public UserDirectoryResponseDto() {}
 
-    public UserDirectoryResponseDto(Long id, String username, Integer elo, String avatarUrl, boolean isOnline, LocalDateTime lastSeenAt) {
+    public UserDirectoryResponseDto(Long id, String username, String displayName, Integer elo, String avatarUrl, boolean isOnline, LocalDateTime lastSeenAt) {
         this.id = id;
         this.username = username;
+        this.displayName = displayName;
         this.elo = elo;
         this.avatarUrl = avatarUrl;
         this.isOnline = isOnline;
@@ -27,6 +29,7 @@ public class UserDirectoryResponseDto {
         return new UserDirectoryResponseDto(
             user.getId(),
             user.getUsername(),
+            user.getDisplayName(),
             user.getEloRating(),
             user.getAvatarUrl(),
             Boolean.TRUE.equals(user.getIsOnline()),
@@ -39,6 +42,9 @@ public class UserDirectoryResponseDto {
 
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = username; }
+
+    public String getDisplayName() { return displayName; }
+    public void setDisplayName(String displayName) { this.displayName = displayName; }
 
     public Integer getElo() { return elo; }
     public void setElo(Integer elo) { this.elo = elo; }

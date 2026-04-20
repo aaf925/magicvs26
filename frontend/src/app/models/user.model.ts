@@ -1,6 +1,7 @@
 export interface PublicUser {
   id: number;
   username: string;
+  displayName?: string | null;
   elo: number;
   friendTag?: string;
   avatarUrl?: string | null;

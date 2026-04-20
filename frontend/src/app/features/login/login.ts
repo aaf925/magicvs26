@@ -252,4 +252,5 @@ interface UserResponse {
   friendsCount: number | null;
   isOnline?: boolean;
   lastSeenAt?: string | null;
+  avatarUrl?: string | null;
 }

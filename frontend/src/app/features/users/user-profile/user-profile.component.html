@@ -39,7 +39,7 @@
             </div>
             
             <h1 class="text-5xl md:text-7xl font-headline font-black text-white uppercase tracking-tighter leading-none mb-4">
-              {{ user()?.username }}
+              {{ user()?.displayName || user()?.username }}
             </h1>
             
             <p class="text-zinc-400 max-w-xl text-sm md:text-base font-body leading-relaxed mb-6">

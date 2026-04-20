@@ -81,7 +81,7 @@
               </div>
             </div>
             <div>
-              <h3 class="font-headline font-bold text-lg text-white group-hover:text-primary transition-colors uppercase">{{ user.username }}</h3>
+              <h3 class="font-headline font-bold text-lg text-white group-hover:text-primary transition-colors uppercase">{{ user.displayName || user.username }}</h3>
               <div class="flex items-center gap-2">
                 <span class="text-[10px] font-headline uppercase tracking-tighter text-tertiary-fixed bg-tertiary/10 px-2 py-0.5 rounded">
                   ELO: {{ user.elo }}
