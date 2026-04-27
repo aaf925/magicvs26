@@ -22,4 +22,9 @@ export class UserService {
       catchError(() => of(undefined as any))
     );
   }
+
+  getCurrentUser(): any {
+    const user = localStorage.getItem('user');
+    return user ? JSON.parse(user) : null;
+  }
 }

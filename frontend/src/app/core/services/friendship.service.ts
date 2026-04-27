@@ -39,4 +39,8 @@ export class FriendshipService {
   removeFriend(friendId: number): Observable<any> {
     return this.http.delete(`${this.apiUrl}/${friendId}`, { headers: this.getHeaders() });
   }
+
+  getFriends(): Observable<any[]> {
+    return this.http.get<any[]>(this.apiUrl, { headers: this.getHeaders() });
+  }
 }

@@ -1,10 +1,12 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { MatchService } from '../../../core/services/match.service';
+import { ProfileService, UserProfile } from '../../../core/services/profile.service';
 import { Match } from '../../../models/match.model';
 import { AvatarComponent } from '../../../shared/components/avatar/avatar.component';
 import { MatchmakingModalComponent } from '../../../shared/components/matchmaking-modal/matchmaking-modal.component';
+import { forkJoin } from 'rxjs';
 
 @Component({
   selector: 'app-match-browser',
@@ -15,9 +17,12 @@ import { MatchmakingModalComponent } from '../../../shared/components/matchmakin
 })
 export class MatchBrowserComponent implements OnInit {
   private matchService = inject(MatchService);
+  private profileService = inject(ProfileService);
+  private cdr = inject(ChangeDetectorRef);
 
   liveMatches: Match[] = [];
   historyMatches: Match[] = [];
+  userProfile: UserProfile | null = null;
   isLoading = true;
   isMatchmakingModalOpen = false;
 
@@ -29,17 +34,30 @@ export class MatchBrowserComponent implements OnInit {
 
   loadMatches(): void {
     this.isLoading = true;
-    this.matchService.getMatches().subscribe({
-      next: (data) => {
-        this.liveMatches = data.filter(m => m.status === 'LIVE');
-        this.historyMatches = data.filter(m => m.status === 'FINISHED');
+    
+    forkJoin({
+      live: this.matchService.getLiveMatches(),
+      history: this.matchService.getMatchHistory(),
+      profile: this.profileService.getMyProfile()
+    }).subscribe({
+      next: (result) => {
+        this.liveMatches = result.live;
+        this.historyMatches = result.history;
+        this.userProfile = result.profile;
         this.isLoading = false;
+        this.cdr.detectChanges();
       },
       error: (err) => {
-        console.error('Error loading matches', err);
+        console.error('Error loading data', err);
         this.isLoading = false;
+        this.cdr.detectChanges();
       }
     });
+  }
+
+  get winRate(): number {
+    if (!this.userProfile || this.userProfile.gamesPlayed === 0) return 0;
+    return Math.round((this.userProfile.gamesWon / this.userProfile.gamesPlayed) * 100);
   }
 
   toggleExpand(matchId: string): void {

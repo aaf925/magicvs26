@@ -1,5 +1,6 @@
 package com.magicvs.backend.controller;
 
+import com.magicvs.backend.dto.UserDirectoryResponseDto;
 import com.magicvs.backend.service.AuthService;
 import com.magicvs.backend.service.FriendshipService;
 import org.springframework.http.HttpStatus;
@@ -7,7 +8,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/friendships")
@@ -76,5 +79,21 @@ public class FriendshipController {
         // We also want to know WHO sent the request if it's PENDING
         // But for now, let's just return the status.
         return ResponseEntity.ok(Map.of("status", status));
+    }
+
+    @GetMapping
+    public ResponseEntity<List<UserDirectoryResponseDto>> getFriends(@RequestHeader("Authorization") String token) {
+        Long userId = authService.getUserId(token.replace("Bearer ", ""))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+        
+        List<UserDirectoryResponseDto> friends = friendshipService.getAcceptedFriends(userId).stream()
+                .map(u -> {
+                    UserDirectoryResponseDto dto = UserDirectoryResponseDto.fromEntity(u);
+                    dto.setFriendshipStatus("ACCEPTED");
+                    return dto;
+                })
+                .collect(Collectors.toList());
+        
+        return ResponseEntity.ok(friends);
     }
 }

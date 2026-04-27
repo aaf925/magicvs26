@@ -1,6 +1,8 @@
 import { Injectable, signal } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { AppNotification, NotificationPageResponse, ToastNotification } from '../../models/notification.model';
+import { AppNotification, NotificationPageResponse, ToastNotification, NotificationType } from '../../models/notification.model';
+
+import { BehaviorSubject } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
 export class NotificationService {
@@ -18,7 +20,18 @@ export class NotificationService {
   readonly toasts = this.toastsSignal.asReadonly();
   readonly dropdownOpen = this.dropdownOpenSignal.asReadonly();
 
-  constructor(private readonly http: HttpClient) {}
+  // Observable for legacy or simplified subscriptions
+  readonly notifications$ = new BehaviorSubject<AppNotification[]>([]);
+
+  constructor(private readonly http: HttpClient) {
+    this.notifications$.next(this.notificationsSignal());
+  }
+
+  // Update signal helper (private)
+  private updateNotifications(newList: AppNotification[]) {
+    this.notificationsSignal.set(newList);
+    this.notifications$.next(newList);
+  }
 
   initForCurrentUser(): void {
     const token = localStorage.getItem('token');
@@ -51,7 +64,7 @@ export class NotificationService {
       .get<NotificationPageResponse>(`${this.apiUrl}?page=${page}&size=${size}`, { headers: this.authHeaders() })
       .subscribe({
         next: (response) => {
-          this.notificationsSignal.set(response.content ?? []);
+          this.updateNotifications(response.content ?? []);
           this.unreadCountSignal.set(response.unreadCount ?? 0);
         },
         error: () => {
@@ -63,8 +76,8 @@ export class NotificationService {
   markAsRead(notificationId: number): void {
     this.http.patch<AppNotification>(`${this.apiUrl}/${notificationId}/read`, {}, { headers: this.authHeaders() }).subscribe({
       next: () => {
-        this.notificationsSignal.update((list) =>
-          list.map((item) => (item.id === notificationId ? { ...item, unread: false, readAt: new Date().toISOString() } : item))
+        this.updateNotifications(
+          this.notificationsSignal().map((item) => (item.id === notificationId ? { ...item, unread: false, readAt: new Date().toISOString() } : item))
         );
 
         this.unreadCountSignal.update((count) => Math.max(0, count - 1));
@@ -75,7 +88,7 @@ export class NotificationService {
   markAllAsRead(): void {
     this.http.patch<{ updated: number }>(`${this.apiUrl}/read-all`, {}, { headers: this.authHeaders() }).subscribe({
       next: () => {
-        this.notificationsSignal.update((list) => list.map((item) => ({ ...item, unread: false, readAt: item.readAt ?? new Date().toISOString() })));
+        this.updateNotifications(this.notificationsSignal().map((item) => ({ ...item, unread: false, readAt: item.readAt ?? new Date().toISOString() })));
         this.unreadCountSignal.set(0);
       }
     });
@@ -85,7 +98,7 @@ export class NotificationService {
     this.http.delete<void>(`${this.apiUrl}/${notificationId}`, { headers: this.authHeaders() }).subscribe({
       next: () => {
         const target = this.notificationsSignal().find((item) => item.id === notificationId);
-        this.notificationsSignal.update((list) => list.filter((item) => item.id !== notificationId));
+        this.updateNotifications(this.notificationsSignal().filter((item) => item.id !== notificationId));
         this.toastsSignal.update((items) => items.filter((item) => item.id !== notificationId));
 
         if (target?.unread) {
@@ -117,6 +130,13 @@ export class NotificationService {
     this.toastsSignal.update((items) => items.filter((item) => item.id !== toastId));
   }
 
+  showToast(title: string, message: string, type: string = 'SYSTEM'): void {
+    const id = Date.now();
+    const toast: ToastNotification = { id, title, message, type: type as NotificationType };
+    this.toastsSignal.update((items) => [toast, ...items].slice(0, 4));
+    window.setTimeout(() => this.dismissToast(id), 4000);
+  }
+
   private connect(token: string): void {
     if (this.eventSource) {
       this.eventSource.close();
@@ -129,12 +149,7 @@ export class NotificationService {
     this.eventSource.addEventListener('notification', (event: MessageEvent) => {
       const incoming = JSON.parse(event.data) as AppNotification;
 
-      this.notificationsSignal.update((existing) => {
-        if (existing.some((item) => item.id === incoming.id)) {
-          return existing;
-        }
-        return [incoming, ...existing].slice(0, 50);
-      });
+      this.updateNotifications([incoming, ...this.notificationsSignal()].slice(0, 50));
 
       if (incoming.unread) {
         this.unreadCountSignal.update((count) => count + 1);
@@ -196,6 +211,8 @@ export class NotificationService {
         return 'Nuevo mensaje';
       case 'BATTLE_INVITE':
         return 'Invitación a batalla';
+      case 'MATCH_FOUND':
+        return '¡Vámonos a la Arena!';
       default:
         return 'Notificación';
     }
@@ -213,6 +230,8 @@ export class NotificationService {
         return 'Han respondido en tu chat.';
       case 'BATTLE_INVITE':
         return 'Un jugador te ha retado a duelo.';
+      case 'MATCH_FOUND':
+        return 'Se ha encontrado un rival de tu nivel. ¡Mucha suerte!';
       default:
         return 'Tienes actividad reciente en MagicVS.';
     }
