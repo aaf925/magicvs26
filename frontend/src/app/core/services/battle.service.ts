@@ -21,21 +21,32 @@ export class BattleService {
   }
 
   pushState(matchId: string, state: GameState): Observable<void> {
+    console.log('📤 Pushing state to server:', {
+      phase: state.currentPhase,
+      pendingOrders: state.pendingBlockerOrders?.length || 0,
+      attacker: state.player1.field.find(c => c.orderedBlockers)?.name || state.player2.field.find(c => c.orderedBlockers)?.name
+    });
     return this.http.post<void>(`${this.apiUrl}/${matchId}/state`, state);
   }
 
   private mapBackendToFrontend(backend: any, myId: string): GameState {
-    // If the backend already uses the new model, we can use it directly with minor card mapping
     return {
       matchId: (backend.matchId || backend.id)?.toString() || '',
       turnCount: backend.turnCount || 1,
       activePlayerId: (backend.activePlayerId || backend.currentTurn)?.toString() || '',
+      priorityPlayerId: backend.priorityPlayerId || (backend.activePlayerId || backend.currentTurn)?.toString() || '',
+      passedCount: backend.passedCount || 0,
+      stack: (backend.stack || []).map((item: any) => ({
+        ...item,
+        card: item.card ? this.mapCard(item.card) : undefined
+      })),
       currentPhase: (backend.currentPhase || backend.phase) as GamePhase || GamePhase.MULLIGAN,
       animationStatus: backend.animationStatus || 'IDLE',
       player1: this.mapPlayerState(backend.player1),
       player2: this.mapPlayerState(backend.player2),
       landsPlayedThisTurn: backend.landsPlayedThisTurn || 0,
-      pendingManaChoice: backend.pendingManaChoice
+      pendingManaChoice: backend.pendingManaChoice,
+      pendingBlockerOrders: backend.pendingBlockerOrders
     };
   }
 
@@ -64,12 +75,19 @@ export class BattleService {
       id: c.id,
       name: c.name,
       imageUrl: c.imageUrl,
-      isTapped: c.isTapped ?? c.tapped,
+      isTapped: c.isTapped ?? c.tapped ?? false,
+      isAttacking: c.isAttacking ?? false,
+      isBlocking: c.isBlocking ?? false,
+      blockingTargetId: c.blockingTargetId,
       type: c.type,
-      manaCost: c.manaCost,
+      oracleText: c.oracleText || '',
+      manaCost: c.manaCost || [],
       power: c.power,
       toughness: c.toughness,
-      producedMana: c.producedMana
+      damageTaken: c.damageTaken || 0,
+      orderedBlockers: c.orderedBlockers,
+      producedMana: c.producedMana,
+      enteredFieldTurn: c.enteredFieldTurn ?? -1
     };
   }
 }

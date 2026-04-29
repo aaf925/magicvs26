@@ -67,6 +67,12 @@ export class BattleboardComponent implements OnInit, OnDestroy {
             this.gameState = state;
             this.me = this.engine.me();
             this.opponent = this.engine.opponent();
+            
+            // Restore selection from synced state if we are the observer
+            if (state?.pendingBlockerOrders?.length && (state.pendingBlockerOrders[0] as any).currentSelection) {
+               this.selectedBlockerIds = [...(state.pendingBlockerOrders[0] as any).currentSelection];
+            }
+            
             this.cdr.detectChanges();
           });
           this.engine.startGame();
@@ -75,8 +81,8 @@ export class BattleboardComponent implements OnInit, OnDestroy {
     }
   }
 
-  onPassPhase(): void {
-    this.engine.nextPhase();
+  onPassPriority(): void {
+    this.engine.passPriority();
   }
 
   onPlayCard(cardId: string): void {
@@ -122,9 +128,59 @@ export class BattleboardComponent implements OnInit, OnDestroy {
     return map[color.toUpperCase()] || 'help';
   }
 
+  selectedBlockerIds: string[] = [];
+
+  getCardById(id: string): any {
+    return this.opponent.field.find((c: any) => c.id === id) || this.me.field.find((c: any) => c.id === id);
+  }
+
+  isBlockerSelected(id: string): boolean {
+    return this.selectedBlockerIds.includes(id);
+  }
+
+  getBlockerSelectionIndex(id: string): number {
+    return this.selectedBlockerIds.indexOf(id) + 1;
+  }
+
+  toggleBlockerOrderSelection(id: string): void {
+    if (this.gameState?.activePlayerId !== this.me?.id) return;
+
+    const index = this.selectedBlockerIds.indexOf(id);
+    if (index !== -1) {
+      this.selectedBlockerIds.splice(index, 1);
+    } else {
+      this.selectedBlockerIds.push(id);
+    }
+    
+    // Sync live selection so the opponent sees it
+    if (this.gameState?.pendingBlockerOrders?.length) {
+      const orders = [...this.gameState.pendingBlockerOrders];
+      (orders[0] as any).currentSelection = [...this.selectedBlockerIds];
+      this.engine.updateState({ pendingBlockerOrders: orders }, true);
+    }
+  }
+
+  isBlockerOrderComplete(): boolean {
+    if (!this.gameState?.pendingBlockerOrders || this.gameState.pendingBlockerOrders.length === 0) return false;
+    return this.selectedBlockerIds.length === this.gameState.pendingBlockerOrders[0].blockerIds.length;
+  }
+
+  submitBlockerOrder(): void {
+    if (!this.gameState?.pendingBlockerOrders || this.gameState.pendingBlockerOrders.length === 0) return;
+    const attackerId = this.gameState.pendingBlockerOrders[0].attackerId;
+    this.engine.confirmBlockerOrder(attackerId, this.selectedBlockerIds);
+    this.selectedBlockerIds = [];
+  }
+
   getColorName(color: string): string {
     const map: any = { W: 'Blanco', U: 'Azul', B: 'Negro', R: 'Rojo', G: 'Verde', C: 'Incoloro' };
     return map[color.toUpperCase()] || 'Desconocido';
+  }
+
+  getRemainingToughness(card: any, player: any): number {
+    const t = this.engine.getModifiedToughness(card, player);
+    const d = card.damageTaken || 0;
+    return t - d;
   }
 
   goToMenu(): void {

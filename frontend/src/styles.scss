@@ -143,3 +143,19 @@ h1, h2, h3, .font-headline {
   animation: card-entrance 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
+/* Combat UI */
+.combat-badge {
+  @apply absolute -top-1.5 -right-1.5 h-6 w-6 rounded-full flex items-center justify-center border z-[60] shadow-xl backdrop-blur-sm;
+  
+  &.attacker {
+    @apply bg-red-600/90 border-white/20 text-white;
+    box-shadow: 0 0 10px rgba(220, 38, 38, 0.5);
+  }
+  
+  &.blocker {
+    @apply bg-blue-600/90 border-white/20 text-white;
+    box-shadow: 0 0 10px rgba(37, 99, 235, 0.5);
+  }
+}
+
+

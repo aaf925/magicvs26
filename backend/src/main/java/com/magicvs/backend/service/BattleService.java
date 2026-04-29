@@ -35,6 +35,9 @@ public class BattleService {
         GameState state = new GameState();
         state.setMatchId(matchId.toString());
         state.setActivePlayerId(match.getPlayer1().getId().toString());
+        state.setPriorityPlayerId(match.getPlayer1().getId().toString());
+        state.setPassedCount(0);
+        state.setStack(new ArrayList<>());
         state.setCurrentPhase("UNTAP");
         state.setTurnCount(1);
         state.setAnimationStatus("IDLE");
@@ -193,15 +196,41 @@ public class BattleService {
         private String matchId;
         private int turnCount;
         private String activePlayerId;
+        private String priorityPlayerId;
+        private int passedCount;
+        private List<StackItem> stack;
         private String currentPhase;
         private String animationStatus;
         private PlayerGameState player1;
         private PlayerGameState player2;
         private int landsPlayedThisTurn;
+        private List<PendingBlockerOrder> pendingBlockerOrders;
+        private Object pendingManaChoice;
+        private Object pendingTarget;
 
         public static Class<GameState> getReturnType() {
             return GameState.class;
         }
+    }
+
+    @Data
+    public static class StackItem {
+        private String id;
+        private String sourceCardId;
+        private String controllerId;
+        private String type; // SPELL, ABILITY, TRIGGER
+        private String name;
+        private CardState card;
+        private String imageUrl;
+        private String targetId;
+        private String targetType;
+        private Object effect;
+    }
+
+    @Data
+    public static class PendingBlockerOrder {
+        private String attackerId;
+        private List<String> blockerIds;
     }
 
     @Data
@@ -249,9 +278,12 @@ public class BattleService {
         private boolean isAttacking;
         @com.fasterxml.jackson.annotation.JsonProperty("isBlocking")
         private boolean isBlocking;
+        private String blockingTargetId;
         private int enteredFieldTurn;
         private String power;
         private String toughness;
+        private int damageTaken;
+        private List<String> orderedBlockers;
         private List<String> producedMana;
     }
 }

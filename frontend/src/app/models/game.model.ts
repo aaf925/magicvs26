@@ -27,6 +27,8 @@ export interface GameCard {
   isBlocking?: boolean;
   blockingTargetId?: string;
   enteredFieldTurn?: number;
+  damageTaken?: number;
+  orderedBlockers?: string[];
 }
 
 export interface ManaPool {
@@ -55,10 +57,26 @@ export interface PlayerGameState {
   manaPool: ManaPool;
 }
 
+export interface StackItem {
+  id: string;
+  sourceCardId: string;
+  controllerId: string;
+  type: 'SPELL' | 'ABILITY' | 'TRIGGER';
+  name: string;
+  card?: GameCard;
+  imageUrl?: string;
+  targetId?: string;
+  targetType?: 'CREATURE' | 'PLAYER';
+  effect?: any;
+}
+
 export interface GameState {
   matchId: string;
   turnCount: number;
   activePlayerId: string;
+  priorityPlayerId: string;
+  passedCount: number;
+  stack: StackItem[];
   currentPhase: GamePhase;
   player1: PlayerGameState;
   player2: PlayerGameState;
@@ -81,4 +99,8 @@ export interface GameState {
     effect: 'DAMAGE' | 'DESTROY' | 'BUFF' | 'DEBUFF' | 'BOUNCE';
     value?: number;
   };
+  pendingBlockerOrders?: {
+    attackerId: string;
+    blockerIds: string[];
+  }[];
 }

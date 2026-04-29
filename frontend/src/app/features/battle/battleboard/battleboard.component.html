@@ -54,12 +54,32 @@
         }
       </div>
 
-      <!-- Pass Phase Button -->
-      <div class="mt-auto pb-8">
-        <button (click)="onPassPhase()" 
-                class="bg-white hover:bg-zinc-200 text-black w-20 h-20 rounded-full flex flex-col items-center justify-center gap-1 shadow-2xl transition-all hover:-translate-y-1 active:translate-y-0 group">
-          <span class="material-symbols-outlined text-xl group-hover:rotate-12 transition-transform">fast_forward</span>
-          <span class="text-[8px] font-black uppercase tracking-tighter">Pasar</span>
+      <!-- Pass Priority Button -->
+      <div class="mt-auto flex flex-col gap-2 pb-8">
+        @if (gameState.activePlayerId === me.id) {
+          <button (click)="engine.forceNextPhase()" 
+                  class="bg-red-500/20 hover:bg-red-500/40 text-red-400 w-20 py-2 rounded-xl text-[7px] font-black uppercase tracking-widest transition-all">
+            Fuerza Bruta
+          </button>
+          <button (click)="engine.resetLives()" 
+                  class="bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 w-20 py-2 rounded-xl text-[7px] font-black uppercase tracking-widest transition-all mt-2">
+            Reset HP
+          </button>
+        }
+        <button (click)="onPassPriority()" 
+                [disabled]="gameState.priorityPlayerId !== me.id || engine.getIsProcessing()"
+                [class.opacity-30]="gameState.priorityPlayerId !== me.id"
+                class="bg-white hover:bg-zinc-200 text-black w-20 h-20 rounded-full flex flex-col items-center justify-center gap-1 shadow-2xl transition-all hover:-translate-y-1 active:translate-y-0 group disabled:cursor-not-allowed">
+          @if (engine.getIsProcessing()) {
+            <span class="material-symbols-outlined text-xl animate-spin text-zinc-400">sync</span>
+          } @else {
+            <span class="material-symbols-outlined text-xl group-hover:rotate-12 transition-transform">
+              {{ gameState.stack.length > 0 ? 'check_circle' : 'fast_forward' }}
+            </span>
+          }
+          <span class="text-[8px] font-black uppercase tracking-tighter">
+            {{ engine.getIsProcessing() ? 'Sinc...' : (gameState.stack.length > 0 ? 'Resolver' : 'Pasar') }}
+          </span>
         </button>
       </div>
     </div>
@@ -176,6 +196,40 @@
         </div>
       </div>
 
+      <!-- THE STACK VISUALIZATION -->
+      @if (gameState.stack.length > 0) {
+        <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[150] flex flex-col items-center gap-4 pointer-events-none">
+          <div class="text-white/40 text-[10px] font-black uppercase tracking-[0.5em] mb-4 italic">Hechizos en resolución</div>
+          
+          <div class="flex flex-col-reverse gap-4">
+            @for (item of gameState.stack; track item.id; let last = $last) {
+              <div class="stack-item flex items-center gap-4 animate-slide-up pointer-events-auto"
+                   [class.active-resolution]="last">
+                <div class="w-24 h-34 rounded-xl overflow-hidden border-2 border-primary/40 shadow-[0_0_30px_rgba(var(--primary-rgb),0.3)] relative">
+                  <img [src]="item.imageUrl" class="w-full h-full object-cover">
+                  <div class="absolute inset-0 bg-black/40 flex flex-col items-center justify-center p-2 text-center">
+                    <div class="text-[8px] text-white font-black uppercase leading-tight">{{ item.name }}</div>
+                    <div class="text-[6px] text-white/60 font-bold uppercase mt-1">{{ item.type }}</div>
+                  </div>
+                </div>
+                
+                @if (last) {
+                  <div class="flex flex-col gap-2">
+                    <div class="bg-primary px-3 py-1 rounded-full text-[8px] font-black text-black uppercase tracking-widest animate-pulse">
+                      Resolviendo...
+                    </div>
+                    <div class="flex gap-1 justify-center">
+                      <div class="w-2 h-2 rounded-full" [class.bg-green-500]="gameState.passedCount >= 1" [class.bg-zinc-700]="gameState.passedCount < 1"></div>
+                      <div class="w-2 h-2 rounded-full" [class.bg-green-500]="gameState.passedCount >= 2" [class.bg-zinc-700]="gameState.passedCount < 2"></div>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        </div>
+      }
+
       <!-- CENTER AREA: BATTLEFIELD -->
       <div class="absolute inset-x-24 top-[45%] -translate-y-1/2 flex flex-col gap-8 z-20 pr-32">
         
@@ -183,6 +237,45 @@
         <div class="opponent-area flex flex-col gap-2 relative">
           <div class="absolute -inset-10 bg-red-500/5 blur-3xl rounded-full pointer-events-none"></div>
           
+          <!-- Opponent Permanents -->
+          <div class="permanents-row">
+            @for (card of getNonLands(opponent.field); track card.id) {
+              <div class="card-zoom-container" (mouseenter)="onHoverCard(card)" (mouseleave)="onClearHover()" (click)="onTapCard(card.id)">
+                <div class="card-battle-mode" 
+                     [class.tapped]="card.isTapped"
+                     [class.attacking]="card.isAttacking"
+                     [class.blocking]="card.isBlocking"
+                     [class.ring-4]="card.isAttacking && !card.blockingTargetId"
+                     [class.ring-primary]="card.isAttacking"
+                     [style.box-shadow]="card.blockingTargetId ? '0 0 30px 5px rgba(59, 130, 246, 0.8)' : (card.isAttacking ? '0 0 20px rgba(var(--primary-rgb), 0.5)' : 'none')"
+                     [style.border-radius]="'12px'"
+                     [class.targetable-glow]="gameState.pendingTarget && (gameState.pendingTarget.validTargets === 'CREATURE' || gameState.pendingTarget.validTargets === 'ANY')">
+                  <div class="card-art-crop">
+                    <img [src]="card.imageUrl" [alt]="card.name">
+                    @if (card.isTapped && !card.isAttacking) { <div class="absolute inset-0 bg-black/40 flex items-center justify-center"><span class="material-symbols-outlined text-white text-lg animate-spin-slow">rotate_right</span></div> }
+                  </div>
+                  @if (card.isAttacking) {
+                    <div class="combat-badge attacker animate-bounce">
+                      <span class="material-symbols-outlined text-[10px]">swords</span>
+                    </div>
+                  }
+                  @if (card.blockingTargetId) {
+                    <div class="combat-badge blocker animate-bounce">
+                      <span class="material-symbols-outlined text-[10px]">shield</span>
+                    </div>
+                  }
+                  @if (card.power !== undefined && card.toughness !== undefined) {
+                    <div class="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-black border border-white/20 text-[10px] font-black text-white px-1.5 py-0 rounded shadow-lg z-10 flex gap-0.5 pointer-events-none">
+                      <span>{{ engine.getModifiedPower(card, opponent) }}</span>
+                      <span>/</span>
+                      <span [class.text-red-400]="card.damageTaken > 0">{{ getRemainingToughness(card, opponent) }}</span>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+
           <!-- Opponent Lands -->
           <div class="lands-row">
             @for (card of getLands(opponent.field); track card.id) {
@@ -205,30 +298,8 @@
             }
             @if (getLands(opponent.field).length === 0) { <div class="opacity-10 text-[8px] uppercase font-black tracking-[0.5em] self-center">Tierras</div> }
           </div>
-
-          <!-- Opponent Permanents -->
-          <div class="permanents-row">
-            @for (card of getNonLands(opponent.field); track card.id) {
-              <div class="card-zoom-container" (mouseenter)="onHoverCard(card)" (mouseleave)="onClearHover()" (click)="onTapCard(card.id)">
-                <div class="card-battle-mode" 
-                     [class.tapped]="card.isTapped"
-                     [class.attacking]="card.isAttacking"
-                     [class.blocking]="card.isBlocking"
-                     [class.targetable-glow]="gameState.pendingTarget && (gameState.pendingTarget.validTargets === 'CREATURE' || gameState.pendingTarget.validTargets === 'ANY')">
-                  <div class="card-art-crop">
-                    <img [src]="card.imageUrl" [alt]="card.name">
-                    @if (card.isTapped && !card.isAttacking) { <div class="absolute inset-0 bg-black/40 flex items-center justify-center"><span class="material-symbols-outlined text-white text-lg animate-spin-slow">rotate_right</span></div> }
-                  </div>
-                  @if (card.isAttacking) {
-                    <div class="combat-badge attacker animate-bounce">
-                      <span class="material-symbols-outlined text-[10px]">swords</span>
-                    </div>
-                  }
-                </div>
-              </div>
-            }
-          </div>
         </div>
+
 
         <div class="h-px bg-white/5 w-full"></div>
 
@@ -246,6 +317,10 @@
                      [class.tapped]="card.isTapped"
                      [class.attacking]="card.isAttacking"
                      [class.blocking]="card.isBlocking"
+                     [class.ring-4]="card.isAttacking && !card.blockingTargetId"
+                     [class.ring-primary]="card.isAttacking"
+                     [style.box-shadow]="card.blockingTargetId ? '0 0 30px 5px rgba(59, 130, 246, 0.8)' : (card.isAttacking ? '0 0 20px rgba(var(--primary-rgb), 0.5)' : 'none')"
+                     [style.border-radius]="'12px'"
                      [class.targetable-glow]="gameState.pendingTarget && (gameState.pendingTarget.validTargets === 'CREATURE' || gameState.pendingTarget.validTargets === 'ANY')">
                   <div class="absolute -inset-4 bg-primary/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity rounded-full"></div>
                   <div class="card-art-crop">
@@ -255,6 +330,18 @@
                   @if (card.isAttacking) {
                     <div class="combat-badge attacker animate-bounce">
                       <span class="material-symbols-outlined text-[10px]">swords</span>
+                    </div>
+                  }
+                  @if (card.blockingTargetId) {
+                    <div class="combat-badge blocker animate-bounce">
+                      <span class="material-symbols-outlined text-[10px]">shield</span>
+                    </div>
+                  }
+                  @if (card.power !== undefined && card.toughness !== undefined) {
+                    <div class="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-black border border-white/20 text-[10px] font-black text-white px-1.5 py-0 rounded shadow-lg z-10 flex gap-0.5 pointer-events-none">
+                      <span>{{ engine.getModifiedPower(card, me) }}</span>
+                      <span>/</span>
+                      <span [class.text-red-400]="card.damageTaken > 0">{{ getRemainingToughness(card, me) }}</span>
                     </div>
                   }
                 </div>
@@ -287,6 +374,76 @@
           </div>
         </div>
       </div>
+
+      <!-- PREMIUM PAYMENT OVERLAY -->
+      @if (gameState.pendingPayment; as pay) {
+        @if (gameState.activePlayerId === me.id) {
+          <div class="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-black/60 backdrop-blur-md animate-fade-in">
+            <div class="text-white font-black text-2xl uppercase tracking-[0.3em] mb-4 animate-slide-up">Pagar Maná Genérico</div>
+            <div class="text-white/60 text-sm font-bold uppercase tracking-widest mb-12 animate-slide-up">Restante: {{ pay.remainingGeneric }}</div>
+            
+            <div class="flex gap-4 max-w-2xl flex-wrap justify-center animate-scale-in">
+              @for (poolKey of ['white', 'blue', 'black', 'red', 'green', 'colorless']; track poolKey) {
+                @if (me.manaPool[poolKey] > 0) {
+                  <button (click)="engine.payGenericMana(poolKey)"
+                          class="mana-choice-btn w-20 h-20 rounded-full flex flex-col items-center justify-center gap-1 transition-all hover:scale-110 active:scale-95 shadow-[0_0_30px_rgba(0,0,0,0.5)] border-2 border-white/20 hover:border-white/50 relative"
+                          [style.background-color]="getColorCode(poolKey === 'colorless' ? 'C' : poolKey.charAt(0))">
+                    <span class="absolute -top-2 -right-2 w-6 h-6 bg-black text-white rounded-full text-xs font-black flex items-center justify-center border border-white/20">
+                      {{ me.manaPool[poolKey] }}
+                    </span>
+                    <span class="material-symbols-outlined text-black text-3xl font-bold">{{ getColorIcon(poolKey === 'colorless' ? 'C' : poolKey.charAt(0)) }}</span>
+                  </button>
+                }
+              }
+            </div>
+            
+            <button (click)="engine.cancelPayment()"
+                    class="mt-12 px-6 py-2 rounded-full border border-white/20 text-white/60 text-xs font-bold uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all">
+              Cancelar
+            </button>
+          </div>
+        }
+      }
+
+      <!-- MULTI-BLOCKING ORDER OVERLAY -->
+      @if (gameState.pendingBlockerOrders && gameState.pendingBlockerOrders.length > 0) {
+        <div class="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-black/80 backdrop-blur-md animate-fade-in">
+            <div class="text-white font-black text-2xl uppercase tracking-[0.3em] mb-2 animate-slide-up text-center">Orden de Daño</div>
+            <div class="text-white/60 text-sm font-bold uppercase tracking-widest mb-12 animate-slide-up text-center">Haz clic en los bloqueadores en el orden que quieres destruirlos</div>
+            
+            <div class="flex gap-4 max-w-4xl flex-wrap justify-center animate-scale-in">
+              @for (blockerId of gameState.pendingBlockerOrders[0].blockerIds; track blockerId) {
+                <div class="card-zoom-container relative group" 
+                     [class.cursor-pointer]="gameState.activePlayerId === (me?.id)"
+                     (click)="gameState.activePlayerId === (me?.id) && toggleBlockerOrderSelection(blockerId)">
+                  <div class="w-[140px] h-[195px] rounded-xl overflow-hidden border-2 transition-all shadow-2xl relative"
+                       [class.border-white]="!isBlockerSelected(blockerId)"
+                       [class.border-primary]="isBlockerSelected(blockerId)"
+                       [class.scale-95]="isBlockerSelected(blockerId)">
+                    
+                    <img [src]="getCardById(blockerId)?.imageUrl" class="w-full h-full object-cover">
+                    
+                    @if (isBlockerSelected(blockerId)) {
+                      <div class="absolute inset-0 bg-primary/40 flex items-center justify-center">
+                        <div class="w-12 h-12 bg-primary text-black rounded-full text-2xl font-black flex items-center justify-center border-4 border-black">
+                          {{ getBlockerSelectionIndex(blockerId) }}
+                        </div>
+                      </div>
+                    } @else {
+                      <div class="absolute inset-0 bg-black/40 group-hover:bg-transparent transition-colors"></div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+            
+            <button (click)="submitBlockerOrder()"
+                    [disabled]="!isBlockerOrderComplete() || gameState.activePlayerId !== (me?.id)"
+                    class="mt-12 px-12 py-4 rounded-full bg-primary text-black font-black uppercase tracking-widest hover:scale-105 active:scale-95 disabled:opacity-50 disabled:scale-100 disabled:pointer-events-none transition-all shadow-[0_0_30px_rgba(var(--primary-rgb),0.3)]">
+              {{ gameState.activePlayerId === (me?.id) ? 'Confirmar Orden' : 'Esperando al Atacante...' }}
+            </button>
+          </div>
+      }
 
       <!-- PREMIUM MANA SELECTION OVERLAY -->
       @if (gameState.pendingManaChoice; as choice) {
@@ -416,9 +573,9 @@
         </div>
 
         <!-- HAND FAN -->
-        <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-48 flex items-end justify-center pointer-events-auto">
+        <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-48 flex items-end justify-center pointer-events-none">
           @for (card of me.hand; track card.id; let i = $index) {
-            <div class="hand-card-wrapper card-zoom-container hand-card-zoom cursor-pointer"
+            <div class="hand-card-wrapper card-zoom-container hand-card-zoom cursor-pointer pointer-events-auto"
                  (mouseenter)="onHoverCard(card)" (mouseleave)="onClearHover()"
                  [style.--rot]="((i - (me.hand.length-1)/2) * (me.hand.length > 7 ? 5 : 7)) + 'deg'"
                  [style.--tx]="((i - (me.hand.length-1)/2) * (me.hand.length > 7 ? 25 : 40)) + 'px'"

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, interval, Subscription } from 'rxjs';
-import { GameState, GamePhase, GameCard, PlayerGameState, ManaPool, AnimationStatus } from '../../models/game.model';
+import { GameState, GamePhase, GameCard, PlayerGameState, ManaPool, AnimationStatus, StackItem } from '../../models/game.model';
 import { BattleService } from './battle.service';
 import { NotificationService } from './notification.service';
 import { UserService } from './user.service';
@@ -75,9 +75,10 @@ export class BattleEngineService {
     state.animationStatus = 'IDLE';
     state.landsPlayedThisTurn = state.landsPlayedThisTurn || 0;
     
-    // Ensure mana pools exist if not present
-    if (!state.player1.manaPool) state.player1.manaPool = this.createEmptyManaPool();
-    if (!state.player2.manaPool) state.player2.manaPool = this.createEmptyManaPool();
+    // Ensure stack and priority fields exist
+    state.stack = state.stack || [];
+    state.passedCount = state.passedCount || 0;
+    state.priorityPlayerId = state.priorityPlayerId || state.activePlayerId;
 
     this.gameStateSubject.next(state);
     this.startPolling(state.matchId);
@@ -95,16 +96,13 @@ export class BattleEngineService {
     const state = this.gameStateSubject.value;
     if (!state || this.isProcessing) return;
 
-    const myId = this.userService.getCurrentUser()?.id?.toString();
-    if (state.activePlayerId !== myId || state.currentPhase === GamePhase.MULLIGAN_DECIDING || state.currentPhase === GamePhase.MULLIGAN) {
-      this.battleService.getBattleState(matchId).subscribe({
-        next: (remoteState) => {
-          if (!this.isProcessing) {
-            this.gameStateSubject.next(remoteState);
-          }
+    this.battleService.getBattleState(matchId).subscribe({
+      next: (remoteState) => {
+        if (!this.isProcessing) {
+          this.gameStateSubject.next(remoteState);
         }
-      });
-    }
+      }
+    });
   }
 
   stopPolling(): void {
@@ -221,7 +219,11 @@ export class BattleEngineService {
 
     if (state.player1.isReady && state.player2.isReady) {
       // Start the very first turn in MAIN 1
-      this.updateState({ currentPhase: GamePhase.MAIN_1 });
+      this.updateState({ 
+        currentPhase: GamePhase.MAIN_1,
+        priorityPlayerId: state.activePlayerId,
+        passedCount: 0
+      });
       this.isProcessing = false;
     } else {
       this.updateState({}); 
@@ -230,15 +232,14 @@ export class BattleEngineService {
 
   nextPhase(): void {
     const state = this.gameStateSubject.value;
-    if (!state || this.isProcessing) return;
-    this.isProcessing = true;
+    if (!state || (state.pendingBlockerOrders?.length || 0) > 0) return;
 
-    const myId = this.userService.getCurrentUser()?.id?.toString();
-    if (state.activePlayerId !== myId) {
-      this.notificationService.showToast('No es tu turno', 'Debes esperar a que el rival termine su fase.', 'WARNING');
-      this.isProcessing = false;
+    if (state.stack.length > 0) {
+      this.notificationService.showToast('La pila no está vacía', 'Debes esperar a que se resuelvan todos los efectos.', 'WARNING');
       return;
     }
+
+    this.isProcessing = true;
 
     const phases = Object.values(GamePhase);
     const currentIndex = phases.indexOf(state.currentPhase);
@@ -246,14 +247,18 @@ export class BattleEngineService {
 
     // Handle Combat Resolution if leaving COMBAT phase
     if (state.currentPhase === GamePhase.COMBAT) {
-      this.resolveCombat();
+      const paused = this.resolveCombat();
+      if (paused) {
+        this.isProcessing = false;
+        return;
+      }
     }
 
     // Cleanup check: Cannot leave END phase with > 7 cards
     if (state.currentPhase === GamePhase.END) {
-      const p = this.me();
-      if (p && p.hand.length > 7) {
-        this.notificationService.showToast('Límite de mano', 'Debes descartar cartas hasta tener 7 antes de terminar el turno.', 'WARNING');
+      const activePlayer = state.activePlayerId === state.player1.id ? state.player1 : state.player2;
+      if (activePlayer.hand.length > 7) {
+        this.notificationService.showToast('Límite de mano', `El jugador activo (${activePlayer.username}) debe descartar hasta tener 7.`, 'WARNING');
         this.isProcessing = false;
         return;
       }
@@ -266,22 +271,166 @@ export class BattleEngineService {
 
       let newState = { ...state };
       newState.currentPhase = nextPhase;
+
+      // Reset combat states when leaving combat
+      if (nextPhase === GamePhase.MAIN_2 || nextPhase === GamePhase.END) {
+        [newState.player1, newState.player2].forEach(p => {
+          p.field = p.field.map(c => ({
+            ...c,
+            isAttacking: false,
+            isBlocking: false,
+            blockingTargetId: undefined
+          }));
+        });
+      }
       
       // Clear mana
       newState.player1 = { ...newState.player1, manaPool: this.createEmptyManaPool() };
       newState.player2 = { ...newState.player2, manaPool: this.createEmptyManaPool() };
 
+      // Priority resets to Active Player on phase change
+      newState.priorityPlayerId = newState.activePlayerId;
+      newState.passedCount = 0;
+
       // Automatic actions
       newState = this.processAutomaticPhaseActions(newState, nextPhase);
 
-      this.gameStateSubject.next(newState);
-      // Keep isProcessing = true until sync completes to prevent poller from overwriting
-      this.battleService.pushState(newState.matchId, newState).subscribe({
-        next: () => { this.isProcessing = false; },
-        error: () => { this.isProcessing = false; }
+      this.updateState(newState, true, () => {
+        this.isProcessing = false;
       });
     }
   }
+
+  forceNextPhase(): void {
+    const state = this.gameStateSubject.value;
+    if (!state || (state.pendingBlockerOrders?.length || 0) > 0) return;
+    
+    const myId = this.userService.getCurrentUser()?.id?.toString();
+    if (state.activePlayerId !== myId) {
+      this.notificationService.showToast('Acción no permitida', 'Solo el jugador activo puede forzar el cambio de fase.', 'ERROR');
+      return;
+    }
+    this.notificationService.showToast('Forzando fase', 'Saltando validaciones...', 'INFO');
+    this.isProcessing = false;
+    this.nextPhase();
+  }
+
+  public getIsProcessing(): boolean {
+    return this.isProcessing;
+  }
+
+  passPriority(): void {
+    const state = this.gameStateSubject.value;
+    if (!state || this.isProcessing) return;
+
+    const myId = this.userService.getCurrentUser()?.id?.toString();
+    const currentPriorityId = state.priorityPlayerId || state.activePlayerId;
+
+    if (currentPriorityId !== myId) {
+      this.notificationService.showToast('No tienes la prioridad', 'Debes esperar a que el rival pase prioridad.', 'WARNING');
+      return;
+    }
+
+    console.log(`Priority Action: ${myId} is passing. Stack size: ${state.stack.length}, Current Passes: ${state.passedCount}`);
+    this.isProcessing = true;
+    const nextPriorityPlayerId = currentPriorityId === state.player1.id ? state.player2.id : state.player1.id;
+    
+    const newPassedCount = (state.passedCount || 0) + 1;
+
+    if (newPassedCount >= 2) {
+      // Rule: Cannot leave END phase with > 7 cards
+      if (state.currentPhase === GamePhase.END) {
+        const activePlayer = state.activePlayerId === state.player1.id ? state.player1 : state.player2;
+        if (activePlayer.hand.length > 7) {
+          const currentUserId = this.userService.getCurrentUser()?.id?.toString();
+          if (state.activePlayerId === currentUserId) {
+            this.notificationService.showToast('Límite de mano', 'Debes descartar cartas hasta tener 7 antes de terminar tu turno.', 'WARNING');
+          } else {
+            this.notificationService.showToast('Esperando descarte', `El rival (${activePlayer.username}) debe descartar cartas.`, 'INFO');
+          }
+          this.isProcessing = false;
+          // Reset passes so they must pass again after discard
+          this.updateState({ passedCount: 0 }, true);
+          return;
+        }
+      }
+
+      console.log("-> Ambos han pasado. Resolviendo...");
+      if (state.stack.length > 0) {
+        this.resolveTopStackItem(state);
+      } else {
+        this.nextPhase();
+      }
+    } else {
+      console.log(`-> Un pase registrado. Prioridad para: ${nextPriorityPlayerId}`);
+      this.updateState({ 
+        priorityPlayerId: nextPriorityPlayerId,
+        passedCount: newPassedCount
+      }, true, () => {
+        this.isProcessing = false;
+      });
+    }
+  }
+
+  private resolveTopStackItem(state: GameState): void {
+    const stack = [...state.stack];
+    const item = stack.pop();
+    if (!item) return;
+
+    state.stack = stack;
+    this.notificationService.showToast('Resolviendo', `Se resuelve: ${item.name}`, 'INFO');
+    
+    // Reset priority to active player after resolution (Standard MTG rule)
+    state.priorityPlayerId = state.activePlayerId;
+    state.passedCount = 0; // Everyone must pass again
+
+    // Execute effect
+    this.applyResolvedEffect(item, state);
+
+    this.updateState(state, true, () => {
+      this.isProcessing = false;
+    });
+  }
+
+  private applyResolvedEffect(item: StackItem, state: GameState): void {
+    const controller = item.controllerId === state.player1.id ? state.player1 : state.player2;
+    
+    // Move card to final destination
+    if (item.card) {
+      const card = item.card;
+      const isSpell = this.isSpell(card);
+      
+      if (card.type?.toLowerCase().includes('instant') || card.type?.toLowerCase().includes('sorcery') || 
+          card.type?.toLowerCase().includes('instantáneo') || card.type?.toLowerCase().includes('conjuro')) {
+        controller.graveyard.push(card);
+        controller.graveyardCount = controller.graveyard.length;
+      } else {
+        card.enteredFieldTurn = state.turnCount;
+        controller.field.push(card);
+      }
+    }
+    
+    // Apply specific effect logic
+    if (item.targetId) {
+       this.executeTargetEffectLogic(item, state);
+    } else if (item.effect) {
+       const effect = item.effect;
+       if (effect.needsTarget && !item.targetId) {
+         // This was an ETB that needs a target but hasn't been chosen yet
+         state.pendingTarget = {
+           sourceCardId: item.sourceCardId,
+           validTargets: effect.validTargets,
+           effect: effect.effect,
+           value: effect.value
+         };
+         this.notificationService.showToast('Efecto de entrada', 'Selecciona un objetivo para la habilidad.', 'INFO');
+       } else {
+         this.executeNonTargetEffect(effect, controller);
+       }
+    }
+  }
+
+
 
   private processAutomaticPhaseActions(state: GameState, phase: GamePhase): GameState {
     let newState = { ...state };
@@ -307,14 +456,30 @@ export class BattleEngineService {
 
   private untapEverything(state: GameState, playerId: string): GameState {
     const isP1 = state.player1.id === playerId;
-    const player = isP1 ? state.player1 : state.player2;
-    const updatedPlayer = {
-      ...player,
-      field: player.field.map(c => ({ ...c, isTapped: false }))
+    
+    // The active player's cards untap, but BOTH players' cards heal (cleanup step happens right before this, but doing it here works)
+    const updatedPlayer1 = {
+      ...state.player1,
+      field: state.player1.field.map(c => ({
+        ...c,
+        isTapped: isP1 ? false : c.isTapped,
+        damageTaken: 0
+      }))
     };
+    
+    const updatedPlayer2 = {
+      ...state.player2,
+      field: state.player2.field.map(c => ({
+        ...c,
+        isTapped: !isP1 ? false : c.isTapped,
+        damageTaken: 0
+      }))
+    };
+
     return {
       ...state,
-      [isP1 ? 'player1' : 'player2']: updatedPlayer
+      player1: updatedPlayer1,
+      player2: updatedPlayer2
     };
   }
 
@@ -357,6 +522,10 @@ export class BattleEngineService {
     
     newState.player1 = { ...newState.player1, manaPool: this.createEmptyManaPool() };
     newState.player2 = { ...newState.player2, manaPool: this.createEmptyManaPool() };
+    
+    // Priority resets to the player whose turn it is
+    newState.priorityPlayerId = nextPlayerId;
+    newState.passedCount = 0;
 
     // Untap everything for the new player
     newState = this.untapEverything(newState, nextPlayerId);
@@ -445,7 +614,7 @@ export class BattleEngineService {
             specificPaid: true
           };
           this.gameStateSubject.next({ ...state });
-          this.isProcessing = false;
+          // Keep isProcessing = true to block polling while payment UI is open
         }
     }
   }
@@ -458,55 +627,99 @@ export class BattleEngineService {
     const cardIndex = p.hand.findIndex(c => c.id === cardId);
     if (cardIndex !== -1) {
       const card = p.hand[cardIndex];
-      
-      // Check for targeting effects before finishing
       const effect = this.parseCardEffect(card);
-      if (effect) {
-        if (effect.needsTarget) {
-          if (!state.pendingTarget) {
-            state.pendingTarget = {
-              sourceCardId: card.id,
-              validTargets: effect.validTargets,
-              effect: effect.effect,
-              value: effect.value
-            };
-            this.notificationService.showToast('Selecciona objetivo', `Elige un objetivo para ${card.name}`, 'INFO');
-            this.gameStateSubject.next({ ...state });
-            this.isProcessing = false;
-            return;
-          }
-        } else {
-          // Non-targeting effect (e.g. Draw cards)
-          this.executeNonTargetEffect(effect, p);
-        }
-      }
 
       const isSpell = this.isSpell(card);
-      p.hand.splice(cardIndex, 1);
-      
-      if (isSpell) {
-        p.graveyard.push(card);
-        p.graveyardCount = p.graveyard.length;
-      } else {
-        card.enteredFieldTurn = state.turnCount;
-        card.isAttacking = false;
-        card.isBlocking = false;
-        p.field.push(card);
-        
-        // Check for ETB (Enter the Battlefield) effects on permanents
-        const etbEffect = this.parseCardEffect(card);
-        if (etbEffect && !etbEffect.needsTarget) {
-           this.executeNonTargetEffect(etbEffect, p);
-        }
+
+      // Handle targeting if needed (Only for Spells at casting time)
+      if (isSpell && effect && effect.needsTarget && !state.pendingTarget) {
+        state.pendingTarget = {
+          sourceCardId: card.id,
+          validTargets: effect.validTargets,
+          effect: effect.effect,
+          value: effect.value
+        };
+        this.notificationService.showToast('Selecciona objetivo', `Elige un objetivo para ${card.name}`, 'INFO');
+        this.gameStateSubject.next({ ...state });
+        this.isProcessing = false;
+        return;
       }
-      
+
+      // Create Stack Item
+      const stackItem: StackItem = {
+        id: Math.random().toString(36).substr(2, 9),
+        sourceCardId: card.id,
+        controllerId: p.id,
+        type: 'SPELL',
+        name: card.name,
+        card: { ...card },
+        imageUrl: card.imageUrl,
+        effect: effect,
+        targetId: state.pendingTarget?.sourceCardId === card.id ? this.selectedTargetId : undefined,
+        targetType: state.pendingTarget?.sourceCardId === card.id ? this.selectedTargetType : undefined
+      };
+
+      // Remove from hand immediately
+      p.hand.splice(cardIndex, 1);
       p.handCount = p.hand.length;
+
+      // Resolve immediately (Sandbox Mode)
+      // this.applyResolvedEffect(stackItem, state);
+      
+      // Add to stack
+      const newStack = [...state.stack, stackItem];
+      
+      // Cleanup pending states
       state.pendingPayment = undefined;
       state.pendingTarget = undefined;
       
-      this.updateState({}, true, () => {
+      // After playing something, priority remains with the player who played it
+      // but everyone else must pass again to resolve it.
+      this.updateState({ 
+        stack: newStack,
+        passedCount: 0 
+      }, true, () => {
         this.isProcessing = false;
       });
+    }
+  }
+
+  private selectedTargetId?: string;
+  private selectedTargetType?: 'CREATURE' | 'PLAYER';
+
+  private executeTargetEffectLogic(item: StackItem, state: GameState): void {
+    const targetType = item.targetType;
+    const targetId = item.targetId;
+    const effect = item.effect?.effect;
+    const value = item.effect?.value || 0;
+
+    if (!targetId || !targetType) return;
+
+    if (targetType === 'PLAYER') {
+      const targetPlayer = state.player1.id === targetId ? state.player1 : state.player2;
+      if (effect === 'DAMAGE') {
+        targetPlayer.hp -= value;
+      }
+    } else {
+      const p1Card = state.player1.field.find(c => c.id === targetId);
+      const p2Card = state.player2.field.find(c => c.id === targetId);
+      const targetCard = p1Card || p2Card;
+      const ownerId = p1Card ? state.player1.id : state.player2.id;
+
+      if (targetCard) {
+        if (effect === 'DAMAGE') {
+          const t = parseInt(targetCard.toughness || '0');
+          if (t - value <= 0) {
+            this.moveToGraveyard(targetCard.id, ownerId);
+          } else {
+            targetCard.toughness = (t - value).toString();
+          }
+        } else if (effect === 'DESTROY') {
+          this.moveToGraveyard(targetCard.id, ownerId);
+        } else if (effect === 'BOUNCE') {
+          this.returnToHand(targetCard.id, ownerId);
+        }
+      }
     }
   }
 
@@ -571,7 +784,12 @@ export class BattleEngineService {
 
   private isSpell(card: GameCard): boolean {
     const type = (card.type || '').toLowerCase();
-    return type.includes('instant') || type.includes('sorcery') || type.includes('instantáneo') || type.includes('conjuro');
+    return type.includes('instant') || type.includes('sorcery') || 
+           type.includes('instantáneo') || type.includes('conjuro') ||
+           type.includes('creature') || type.includes('criatura') ||
+           type.includes('artifact') || type.includes('artefacto') ||
+           type.includes('enchantment') || type.includes('encantamiento') ||
+           type.includes('planeswalker');
   }
 
   private parseManaCost(cost: string[]): any {
@@ -683,6 +901,7 @@ export class BattleEngineService {
     // or manually undo. For now, let's just clear the pending state and NOT update server.
     // However, mana was already subtracted locally. 
     // Best practice: Reload state from server.
+    this.isProcessing = false;
     this.refreshGameState();
   }
 
@@ -817,53 +1036,13 @@ export class BattleEngineService {
     const state = this.gameStateSubject.value;
     if (!state || !state.pendingTarget) return;
 
-    this.isProcessing = true;
-    const effect = state.pendingTarget.effect;
-    const value = state.pendingTarget.value || 0;
+    this.selectedTargetId = targetId;
+    this.selectedTargetType = targetType;
+
+    // Now finish playing the source card (it will be pushed to stack with these targets)
     const sourceCardId = state.pendingTarget.sourceCardId;
-
-    if (targetType === 'PLAYER') {
-      const targetPlayer = state.player1.id === targetId ? state.player1 : state.player2;
-      if (effect === 'DAMAGE') {
-        targetPlayer.hp -= value;
-        this.notificationService.showToast('Efecto aplicado', `${value} de daño a ${targetPlayer.username}`, 'SUCCESS');
-      }
-    } else {
-      // Creature target
-      const p1Card = state.player1.field.find(c => c.id === targetId);
-      const p2Card = state.player2.field.find(c => c.id === targetId);
-      const targetCard = p1Card || p2Card;
-      const ownerId = p1Card ? state.player1.id : state.player2.id;
-
-      if (targetCard) {
-        if (effect === 'DAMAGE') {
-          const t = parseInt(targetCard.toughness || '0');
-          if (t - value <= 0) {
-            this.moveToGraveyard(targetCard.id, ownerId);
-            this.notificationService.showToast('Criatura destruida', `${targetCard.name} ha muerto por el daño.`, 'SUCCESS');
-          } else {
-            targetCard.toughness = (t - value).toString();
-            this.notificationService.showToast('Efecto aplicado', `${targetCard.name} recibe ${value} de daño.`, 'INFO');
-          }
-        } else if (effect === 'DESTROY') {
-          const isIndestructible = this.hasAbility(targetCard, 'indestructible');
-          if (!isIndestructible) {
-            this.moveToGraveyard(targetCard.id, ownerId);
-            this.notificationService.showToast('Criatura destruida', `${targetCard.name} ha sido destruida.`, 'SUCCESS');
-          } else {
-            this.notificationService.showToast('Inmune', `${targetCard.name} es indestructible.`, 'WARNING');
-          }
-        } else if (effect === 'BOUNCE') {
-          this.returnToHand(targetCard.id, ownerId);
-          this.notificationService.showToast('Regreso', `${targetCard.name} vuelve a la mano.`, 'INFO');
-        }
-      }
-    }
-
-    // Now finish playing the source card
-    const sourceCardIdSaved = sourceCardId;
     state.pendingTarget = undefined; 
-    this.finishPlayingCard(sourceCardIdSaved);
+    this.finishPlayingCard(sourceCardId);
   }
 
   targetPlayer(playerId: string): void {
@@ -915,6 +1094,7 @@ export class BattleEngineService {
   }
 
   private handleBlockingAction(cardId: string, me: PlayerGameState, opp: PlayerGameState): void {
+    this.isProcessing = true;
     // 1. Check if clicking my own card to select it as a blocker
     const myCard = me.field.find(c => c.id === cardId);
     if (myCard) {
@@ -925,14 +1105,15 @@ export class BattleEngineService {
       // Toggle selection for blocking
       if (myCard.isBlocking) {
         myCard.isBlocking = false;
-        myCard.blockingTargetId = undefined;
       } else {
         // Select this card as the current "active" blocker
-        me.field.forEach(c => c.isBlocking = false);
+        // We DON'T clear others anymore, just toggle this one
         myCard.isBlocking = true;
         this.notificationService.showToast('Bloqueador', `Selecciona qué atacante bloquea ${myCard.name}`, 'INFO');
       }
-      this.gameStateSubject.next({ ...this.gameStateSubject.value! });
+      this.updateState({}, true, () => {
+        this.isProcessing = false;
+      });
       return;
     }
 
@@ -941,6 +1122,14 @@ export class BattleEngineService {
     const opponentAttacker = opp.field.find(c => c.id === cardId && c.isAttacking);
 
     if (selectedBlocker && opponentAttacker) {
+      // VALIDATION: UNBLOCKABLE
+      const isUnblockable = this.hasAbility(opponentAttacker, 'unblockable') || this.hasAbility(opponentAttacker, 'imbloqueable');
+      if (isUnblockable) {
+        this.notificationService.showToast('No puede bloquear', `${opponentAttacker.name} es imbloqueable.`, 'WARNING');
+        this.isProcessing = false;
+        return;
+      }
+
       // VALIDATION: FLYING / REACH
       const attackerHasFlying = this.hasAbility(opponentAttacker, 'flying') || this.hasAbility(opponentAttacker, 'vuela');
       const blockerHasFlying = this.hasAbility(selectedBlocker, 'flying') || this.hasAbility(selectedBlocker, 'vuela');
@@ -948,12 +1137,28 @@ export class BattleEngineService {
 
       if (attackerHasFlying && !blockerHasFlying && !blockerHasReach) {
         this.notificationService.showToast('No puede bloquear', `${opponentAttacker.name} vuela y no tienes Alcance.`, 'WARNING');
+        this.isProcessing = false;
         return;
       }
 
       selectedBlocker.blockingTargetId = opponentAttacker.id;
+      selectedBlocker.isBlocking = false; // Finished assigning this one
       this.notificationService.showToast('Bloqueo asignado', `${selectedBlocker.name} bloquea a ${opponentAttacker.name}`, 'SUCCESS');
-      this.gameStateSubject.next({ ...this.gameStateSubject.value! });
+      
+      // Hint for Menace
+      const hasMenace = this.hasAbility(opponentAttacker, 'menace') || this.hasAbility(opponentAttacker, 'menaza');
+      if (hasMenace) {
+        const currentBlockers = me.field.filter(c => c.blockingTargetId === opponentAttacker.id).length;
+        if (currentBlockers < 2) {
+          this.notificationService.showToast('Menaza', `${opponentAttacker.name} tiene Menaza. Necesitas al menos otro bloqueador.`, 'INFO');
+        }
+      }
+
+      this.updateState({}, true, () => {
+        this.isProcessing = false;
+      });
+    } else {
+      this.isProcessing = false;
     }
   }
 
@@ -972,6 +1177,10 @@ export class BattleEngineService {
     if (a === 'flying' || a === 'vuela') return text.includes('flying') || text.includes('vuela') || type.includes('flying') || type.includes('vuela');
     if (a === 'reach' || a === 'alcance') return text.includes('reach') || text.includes('alcance');
     if (a === 'first strike' || a === 'dañar primero') return text.includes('first strike') || text.includes('dañar primero');
+    if (a === 'double strike' || a === 'dañar dos veces') return text.includes('double strike') || text.includes('dañar dos veces');
+    if (a === 'unblockable' || a === 'imbloqueable') return text.includes('unblockable') || text.includes('imbloqueable') || text.includes('no puede ser bloqueada');
+    if (a === 'menace' || a === 'menaza') return text.includes('menace') || text.includes('menaza');
+    if (a === 'ward' || a === 'protección') return text.includes('ward') || text.includes('protección');
     
     return false;
   }
@@ -987,6 +1196,14 @@ export class BattleEngineService {
       return;
     }
 
+    // Summoning Sickness check for non-lands
+    const isLand = card.type?.toLowerCase().includes('land') || card.type?.toLowerCase().includes('tierra');
+    const hasHaste = this.hasAbility(card, 'haste') || this.hasAbility(card, 'prisa');
+    if (!isLand && card.enteredFieldTurn === state.turnCount && !hasHaste) {
+      this.notificationService.showToast('Mareo de invocación', 'Esta criatura no puede activar habilidades todavía.', 'WARNING');
+      return;
+    }
+
     this.isProcessing = true;
     card.isTapped = true;
     
@@ -998,9 +1215,7 @@ export class BattleEngineService {
         options: produced
       };
       this.gameStateSubject.next({ ...state });
-      this.updateState({}, true, () => {
-        this.isProcessing = false;
-      });
+      this.updateState({}, true); // Keep isProcessing = true
     } else {
       const manaType = produced.length === 1 ? this.mapColorToPoolKey(produced[0]) : this.getManaType(card);
       if (manaType) {
@@ -1028,7 +1243,9 @@ export class BattleEngineService {
     state.pendingManaChoice = undefined;
     // Local update to hide overlay
     this.gameStateSubject.next({ ...state });
-    this.updateState({}, true);
+    this.updateState({}, true, () => {
+      this.isProcessing = false;
+    });
   }
 
   private mapColorToPoolKey(color: string): keyof ManaPool | null {
@@ -1068,7 +1285,7 @@ export class BattleEngineService {
     return null;
   }
 
-  private updateState(patch: Partial<GameState>, sync: boolean = true, onComplete?: () => void): void {
+  public updateState(patch: Partial<GameState>, sync: boolean = true, onComplete?: () => void): void {
     const current = this.gameStateSubject.value;
     if (current) {
       let newState = { ...current, ...patch };
@@ -1079,8 +1296,17 @@ export class BattleEngineService {
       this.gameStateSubject.next(newState);
       if (sync) {
         this.battleService.pushState(newState.matchId, newState).subscribe({
-          next: () => { if (onComplete) onComplete(); },
-          error: () => { if (onComplete) onComplete(); }
+          next: () => { 
+            console.log("✅ Sync OK");
+            if (onComplete) onComplete(); 
+          },
+          error: (err) => { 
+            console.error("❌ Sync Error:", err);
+            if (err.status === 401) {
+              this.notificationService.showToast('Sesión Expirada', 'Tu sesión no es válida. Por favor, haz login de nuevo.', 'ERROR');
+            }
+            if (onComplete) onComplete(); 
+          }
         });
       } else if (onComplete) {
         onComplete();
@@ -1114,6 +1340,15 @@ export class BattleEngineService {
     }
   }
 
+  resetLives(): void {
+    const state = this.gameStateSubject.value;
+    if (!state) return;
+    state.player1.hp = 20;
+    state.player2.hp = 20;
+    this.updateState({ player1: state.player1, player2: state.player2 }, true);
+    this.notificationService.showToast('Debug', 'Vidas reseteadas a 20.', 'INFO');
+  }
+
   private shuffle(array: any[]): void {
     for (let i = array.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -1125,68 +1360,111 @@ export class BattleEngineService {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  private resolveCombat(): void {
+  private resolveCombat(): boolean {
     const state = this.gameStateSubject.value;
-    if (!state) return;
+    if (!state) return false;
 
     const activePlayer = state.player1.id === state.activePlayerId ? state.player1 : state.player2;
     const defendingPlayer = state.player1.id === state.activePlayerId ? state.player2 : state.player1;
 
     const attackers = activePlayer.field.filter(c => c.isAttacking);
-    
-    // FIRST STRIKE STEP
+    console.log(`⚔️ Resolviendo combate: ${attackers.length} atacantes encontrados.`);
+    if (attackers.length === 0) return false;
+
+    // 1. Validate Menace and other illegal blocks
     attackers.forEach(attacker => {
       const blockers = defendingPlayer.field.filter(c => c.blockingTargetId === attacker.id);
+      const hasMenace = this.hasAbility(attacker, 'menace') || this.hasAbility(attacker, 'menaza');
+      if (hasMenace && blockers.length === 1) {
+         blockers.forEach(b => {
+           b.blockingTargetId = undefined;
+           b.isBlocking = false;
+         });
+         this.notificationService.showToast('Bloqueo ilegal', `Menaza: ${attacker.name} no puede ser bloqueado por una sola criatura.`, 'WARNING');
+      }
+    });
+
+    // 1.5 Check for un-ordered multi-blocking
+    const unOrderedMultiBlockers = attackers.filter(attacker => {
+      const blockers = defendingPlayer.field.filter(c => c.blockingTargetId === attacker.id);
+      return blockers.length > 1 && !(attacker as any).orderedBlockers;
+    });
+
+    if (unOrderedMultiBlockers.length > 0 || (state.pendingBlockerOrders && state.pendingBlockerOrders.length > 0)) {
+      if (unOrderedMultiBlockers.length > 0 && !state.pendingBlockerOrders?.length) {
+         const pendingOrders = unOrderedMultiBlockers.map(a => ({
+           attackerId: a.id,
+           blockerIds: defendingPlayer.field.filter(c => c.blockingTargetId === a.id).map(c => c.id)
+         }));
+         console.log(`⏸️ Pausando combate para elegir orden de bloqueadores...`);
+         this.updateState({ pendingBlockerOrders: pendingOrders }, true);
+      }
+      this.isProcessing = false; 
+      return true; 
+    }
+
+    // 2. FIRST STRIKE / DOUBLE STRIKE STEP
+    attackers.forEach(attacker => {
+      const blockers = defendingPlayer.field.filter(c => c.blockingTargetId === attacker.id);
+      console.log(`🔎 Atacante ${attacker.name} bloqueado por: ${blockers.length} criaturas (ID: ${attacker.id}).`);
+      
+      const hasFS = this.hasAbility(attacker, 'first strike') || this.hasAbility(attacker, 'dañar primero');
+      const hasDS = this.hasAbility(attacker, 'double strike') || this.hasAbility(attacker, 'dañar dos veces');
+      
       if (blockers.length > 0) {
         const blocker = blockers[0];
-        const hasFirstStrike = this.hasAbility(attacker, 'first strike') || this.hasAbility(attacker, 'dañar primero');
-        const blockerHasFirstStrike = this.hasAbility(blocker, 'first strike') || this.hasAbility(blocker, 'dañar primero');
+        const blockerFS = this.hasAbility(blocker, 'first strike') || this.hasAbility(blocker, 'dañar primero');
+        const blockerDS = this.hasAbility(blocker, 'double strike') || this.hasAbility(blocker, 'dañar dos veces');
 
-        if (hasFirstStrike && !blockerHasFirstStrike) {
+        if ((hasFS || hasDS) && !(blockerFS || blockerDS)) {
           this.fight(attacker, blocker, activePlayer, defendingPlayer, true); 
-        } else if (!hasFirstStrike && blockerHasFirstStrike) {
+        } else if (!(hasFS || hasDS) && (blockerFS || blockerDS)) {
           this.fight(attacker, blocker, activePlayer, defendingPlayer, false, true);
+        } else if ((hasFS || hasDS) && (blockerFS || blockerDS)) {
+          this.fight(attacker, blocker, activePlayer, defendingPlayer);
         }
       }
     });
 
-    // NORMAL DAMAGE STEP
+    // 3. NORMAL DAMAGE STEP
     attackers.forEach(attacker => {
-      const blockers = defendingPlayer.field.filter(c => c.blockingTargetId === attacker.id);
-      if (blockers.length > 0) {
-        const blocker = blockers[0];
-        const attackerAlive = activePlayer.field.find(c => c.id === attacker.id);
-        const blockerAlive = defendingPlayer.field.find(c => c.id === blocker.id);
+      const attackerStillAlive = activePlayer.field.find(c => c.id === attacker.id);
+      if (!attackerStillAlive) return;
 
-        if (attackerAlive && blockerAlive) {
-          const hasFS = this.hasAbility(attacker, 'first strike') || this.hasAbility(attacker, 'dañar primero');
-          const blockerFS = this.hasAbility(blocker, 'first strike') || this.hasAbility(blocker, 'dañar primero');
-          
-          if (hasFS && blockerFS) {
-            this.fight(attacker, blocker, activePlayer, defendingPlayer);
-          } else if (!hasFS && !blockerFS) {
-            this.fight(attacker, blocker, activePlayer, defendingPlayer);
-          } else if (hasFS && !blockerFS) {
-            this.fight(attacker, blocker, activePlayer, defendingPlayer, false, true); 
-          } else if (!hasFS && blockerFS) {
-            this.fight(attacker, blocker, activePlayer, defendingPlayer, true, false);
-          }
-        }
+      const blockers = defendingPlayer.field.filter(c => c.blockingTargetId === attacker.id);
+      if (blockers.length === 0) {
+        console.log(`💥 ${attacker.name} NO bloqueado. Daño directo: ${this.getModifiedPower(attacker, activePlayer)}`);
+        defendingPlayer.hp -= this.getModifiedPower(attacker, activePlayer);
       } else {
-        const p = this.getModifiedPower(attacker, activePlayer);
-        defendingPlayer.hp -= p;
-        if (this.hasAbility(attacker, 'lifelink') || this.hasAbility(attacker, 'vínculo vital')) {
-          activePlayer.hp += p;
+        console.log(`🛡️ ${attacker.name} bloqueado. Resolviendo combate con bloqueadores.`);
+        
+        let hasTrample = this.hasAbility(attacker, 'trample') || this.hasAbility(attacker, 'arrollar');
+        this.fightSequential(attacker, blockers, activePlayer, defendingPlayer);
+
+        if (hasTrample) {
+           // Simplistic trample logic post-combat
         }
-        this.notificationService.showToast('Daño directo', `${attacker.name} inflige ${p} de daño a ${defendingPlayer.username}`, 'WARNING');
       }
     });
 
     // Cleanup
+    attackers.forEach(c => {
+      c.isAttacking = false;
+      c.orderedBlockers = undefined;
+    });
     defendingPlayer.field.forEach(c => {
       c.blockingTargetId = undefined;
       c.isBlocking = false;
     });
+
+    console.log("🔥 Combate resuelto. Sincronizando daños...");
+    
+    this.updateState({ 
+      player1: { ...state.player1 }, 
+      player2: { ...state.player2 },
+      pendingBlockerOrders: []
+    }, true);
+    return false;
   }
 
   private fight(attacker: GameCard, blocker: GameCard, activePlayer: PlayerGameState, defendingPlayer: PlayerGameState, attackerOnly = false, blockerOnly = false): void {
@@ -1208,16 +1486,14 @@ export class BattleEngineService {
       if (hasDeathtouch) {
         if (!blockerIndestructible) this.moveToGraveyard(blocker.id, defendingPlayer.id);
       } else {
-        const newBT = bt - ap;
-        if (newBT <= 0 && !blockerIndestructible) {
+        blocker.damageTaken = (blocker.damageTaken || 0) + ap;
+        if (blocker.damageTaken >= bt && !blockerIndestructible) {
           this.moveToGraveyard(blocker.id, defendingPlayer.id);
-        } else {
-          blocker.toughness = (parseInt(blocker.toughness || '0') - ap).toString();
         }
       }
 
       if (this.hasAbility(attacker, 'trample') || this.hasAbility(attacker, 'arrollar')) {
-        const excess = ap - bt;
+        const excess = ap - bt; // Trample excess ignores damageTaken for simplicity unless we want to track remaining toughness
         if (excess > 0) defendingPlayer.hp -= excess;
       }
     }
@@ -1228,34 +1504,55 @@ export class BattleEngineService {
       }
 
       if (blockerDeathtouch) {
-        if (!attackerIndestructible) this.moveToGraveyard(attacker.id, activePlayer.id);
-      } else {
-        const newAT = at - bp;
-        if (newAT <= 0 && !attackerIndestructible) {
+        if (!attackerIndestructible) {
+          console.log(`💀 ${attacker.name} destruido por toque mortal de ${blocker.name}`);
           this.moveToGraveyard(attacker.id, activePlayer.id);
-        } else {
-          attacker.toughness = (parseInt(attacker.toughness || '0') - bp).toString();
+        }
+      } else {
+        attacker.damageTaken = (attacker.damageTaken || 0) + bp;
+        console.log(`💥 ${attacker.name} recibe ${bp} de daño de ${blocker.name}. Total recibido: ${attacker.damageTaken}/${at}`);
+        if (attacker.damageTaken >= at && !attackerIndestructible) {
+          console.log(`💀 ${attacker.name} muere por daño letal.`);
+          this.moveToGraveyard(attacker.id, activePlayer.id);
         }
       }
     }
   }
 
-  private getModifiedPower(card: GameCard, player: PlayerGameState): number {
+  public getModifiedPower(card: GameCard, player: PlayerGameState): number {
     let p = parseInt(card.power || '0');
+    const counters = (card as any).counters || 0;
+    p += counters;
+
     player.field.forEach(perm => {
       const text = (perm.oracleText || '').toLowerCase();
-      if (text.includes('creatures you control get +1/+1')) {
+      // Generic P/T modifiers (+1/+1, +2/+2, etc.)
+      const ptMatch = text.match(/creatures you control get ([+-]\d+)\/([+-]\d+)/);
+      if (ptMatch) {
+        p += parseInt(ptMatch[1]);
+      }
+      
+      // Specific Lord effects (simplification)
+      if (text.includes('other creatures you control get +1/+1') && perm.id !== card.id) {
         p += 1;
       }
     });
     return p;
   }
 
-  private getModifiedToughness(card: GameCard, player: PlayerGameState): number {
+  public getModifiedToughness(card: GameCard, player: PlayerGameState): number {
     let t = parseInt(card.toughness || '0');
+    // Sumar contadores
+    const counters = (card as any).counters || 0;
+    t += counters;
+
     player.field.forEach(perm => {
       const text = (perm.oracleText || '').toLowerCase();
-      if (text.includes('creatures you control get +1/+1')) {
+      const ptMatch = text.match(/creatures you control get ([+-]\d+)\/([+-]\d+)/);
+      if (ptMatch) {
+        t += parseInt(ptMatch[2]);
+      }
+      if (text.includes('other creatures you control get +1/+1') && perm.id !== card.id) {
         t += 1;
       }
     });
@@ -1283,8 +1580,92 @@ export class BattleEngineService {
     const index = p.field.findIndex(c => c.id === cardId);
     if (index !== -1) {
       const card = p.field.splice(index, 1)[0];
+      card.isAttacking = false;
+      card.isBlocking = false;
+      card.blockingTargetId = undefined;
+      card.damageTaken = 0; // Reset damage in graveyard
+      
       p.graveyard.push(card);
       p.graveyardCount = p.graveyard.length;
+      p.field = [...p.field]; // Force new reference
+      console.log(`🪦 Carta ${card.name} movida al cementerio de ${p.username}.`);
+    } else {
+      console.warn(`⚠️ No se pudo encontrar la carta ${cardId} en el campo de ${p.username} para moverla al cementerio.`);
     }
+  }
+
+  confirmBlockerOrder(attackerId: string, orderedBlockerIds: string[]): void {
+    const state = this.gameStateSubject.value;
+    if (!state || !state.pendingBlockerOrders) return;
+
+    // Only allow active player to set orders
+    if (state.activePlayerId !== this.me()?.id) return;
+
+    const activePlayer = state.player1.id === state.activePlayerId ? state.player1 : state.player2;
+    const attacker = activePlayer.field.find(c => c.id === attackerId);
+    if (attacker) {
+      (attacker as any).orderedBlockers = orderedBlockerIds;
+    }
+
+    state.pendingBlockerOrders = state.pendingBlockerOrders.filter(o => o.attackerId !== attackerId);
+    if (state.pendingBlockerOrders.length === 0) {
+      state.pendingBlockerOrders = undefined;
+      // All ordered, resume combat resolution!
+      this.resolveCombat();
+      
+      // Check if we need to advance phase if resolveCombat finished and didn't pause again
+      if (!this.gameStateSubject.value?.pendingBlockerOrders) {
+         this.nextPhase();
+      }
+    } else {
+      this.gameStateSubject.next({ ...state });
+      this.updateState({}, true);
+    }
+  }
+
+  private fightSequential(attacker: GameCard, blockers: GameCard[], activePlayer: PlayerGameState, defendingPlayer: PlayerGameState): void {
+    let remainingAttackerDamage = this.getModifiedPower(attacker, activePlayer);
+    const order = (attacker as any).orderedBlockers || blockers.map(b => b.id);
+    
+    // Sort blockers based on the defined order
+    const sortedBlockers = [...blockers].sort((a, b) => {
+      const idxA = order.indexOf(a.id);
+      const idxB = order.indexOf(b.id);
+      return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+    });
+
+    sortedBlockers.forEach(blocker => {
+      const blockerPower = this.getModifiedPower(blocker, defendingPlayer);
+      const blockerToughness = this.getModifiedToughness(blocker, defendingPlayer);
+      const remainingBlockerToughness = Math.max(0, blockerToughness - (blocker.damageTaken || 0));
+
+      // Attacker deals damage to blocker
+      if (remainingAttackerDamage > 0) {
+        const damageToAssign = Math.min(remainingAttackerDamage, remainingBlockerToughness);
+        // In MTG, you must assign at least lethal to the first before moving to second.
+        // If it's the last blocker, it takes all remaining damage.
+        const isLast = blocker === sortedBlockers[sortedBlockers.length - 1];
+        const finalDamage = isLast ? remainingAttackerDamage : damageToAssign;
+
+        blocker.damageTaken = (blocker.damageTaken || 0) + finalDamage;
+        remainingAttackerDamage -= finalDamage;
+        console.log(`💥 ${attacker.name} hace ${finalDamage} de daño a ${blocker.name}. (Restante: ${remainingAttackerDamage})`);
+        
+        if (blocker.damageTaken >= blockerToughness) {
+          console.log(`💀 ${blocker.name} muere por daño de ${attacker.name}`);
+          this.moveToGraveyard(blocker.id, defendingPlayer.id);
+        }
+      }
+
+      // Blocker deals damage back to attacker (simultaneous)
+      const attackerToughness = this.getModifiedToughness(attacker, activePlayer);
+      attacker.damageTaken = (attacker.damageTaken || 0) + blockerPower;
+      console.log(`💥 ${blocker.name} hace ${blockerPower} de daño a ${attacker.name}. Total: ${attacker.damageTaken}/${attackerToughness}`);
+      
+      if (attacker.damageTaken >= attackerToughness) {
+        console.log(`💀 ${attacker.name} muere por daño de los bloqueadores.`);
+        this.moveToGraveyard(attacker.id, activePlayer.id);
+      }
+    });
   }
 }
