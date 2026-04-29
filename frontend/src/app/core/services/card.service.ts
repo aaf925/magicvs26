@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { Card } from '../../models/card.model';
@@ -31,18 +31,35 @@ export class CardService {
     );
   }
 
-  searchCards(query = '', color = '', type = '', rarity = '', page = 0, size = 20): Observable<CardPage> {
-    const params = new URLSearchParams({
+  searchCards(query = '', color = '', type = '', rarity = '', page = 0, size = 20, favoritesOnly = false): Observable<CardPage> {
+    const params: Record<string, string> = {
       name: query,
       color,
       type,
       rarity,
       page: String(page),
-      size: String(size)
-    });
-    return this.http.get<any>(`${this.apiUrl}/search?${params}`).pipe(
+      size: String(size),
+      favoritesOnly: String(favoritesOnly)
+    };
+    
+    const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+    const headers = token && favoritesOnly ? new HttpHeaders({ Authorization: `Bearer ${token}` }) : new HttpHeaders();
+
+    return this.http.get<any>(`${this.apiUrl}/search`, { params, headers }).pipe(
       map(response => this.mapSearchResponseToCardPage(response, page, size))
     );
+  }
+
+  checkFavoriteStatus(cardId: string): Observable<{ isFavorite: boolean }> {
+    const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+    const headers = token ? new HttpHeaders({ Authorization: `Bearer ${token}` }) : new HttpHeaders();
+    return this.http.get<{ isFavorite: boolean }>(`${this.apiUrl}/${cardId}/favorite`, { headers });
+  }
+
+  toggleFavorite(cardId: string): Observable<{ isFavorite: boolean }> {
+    const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+    const headers = token ? new HttpHeaders({ Authorization: `Bearer ${token}` }) : new HttpHeaders();
+    return this.http.post<{ isFavorite: boolean }>(`${this.apiUrl}/${cardId}/favorite`, {}, { headers });
   }
 
   getStats(): Observable<{ totalCards: number; totalSets: number }> {
@@ -96,13 +113,11 @@ export class CardService {
   }
 
   private mapBackendCardToCard(card: any): Card {
-    // Manejo especial para cartas con doble cara
-    
     return {
       id: String(card.id),
       name: card.name || '',
       imageUrl: card.normalImageUri || card.smallImageUri || card.largeImageUri || card.pngImageUri || '',
-      imageUrl2: '',
+      imageUrl2: card.backImageUri || '',
       manaCost: this.parseManaCost(card.manaCost),
       type: card.typeLine || card.layout || '',
       rarity: this.capitalize(card.rarity) || '',
@@ -110,7 +125,22 @@ export class CardService {
       flavorText: card.flavorText || '',
       powerToughness: card.power && card.toughness ? `${card.power}/${card.toughness}` : undefined,
       legalities: this.normalizeLegalities(card.legalities),
-      price: this.normalizePrice(card.price)
+      price: this.normalizePrice(card.price),
+      edhrecRank: card.edhrecRank,
+      setName: card.setName,
+      collectorNumber: card.collectorNumber,
+      cmc: card.cmc,
+      releasedAt: card.releasedAt,
+      artist: card.artist,
+      faces: card.faces ? card.faces.map((f: any) => ({
+        name: f.name,
+        manaCost: this.parseManaCost(f.manaCost),
+        type: f.typeLine,
+        oracleText: f.oracleText,
+        flavorText: f.flavorText,
+        powerToughness: f.power && f.toughness ? `${f.power}/${f.toughness}` : undefined,
+        imageUrl: f.normalImageUri
+      })) : undefined
     };
   }
 
