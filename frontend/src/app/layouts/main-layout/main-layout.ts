@@ -8,6 +8,7 @@ import { ToastComponent } from '../../shared/components/toast/toast.component';
 import { UserService } from '../../core/services/user.service';
 import { FriendshipService } from '../../core/services/friendship.service';
 import { ToastService } from '../../core/services/toast.service';
+import { ArenaService } from '../../core/services/arena.service';
 import { ConfirmDialogComponent } from '../../shared/components/confirm-dialog/confirm-dialog.component';
 
 interface StoredUser {
@@ -34,6 +35,7 @@ export class MainLayout {
   avatarUrl: string | null = null;
   manaColor: { name: string; color: string; code: string } | null = null;
   isOnline = false;
+  isBattleActive = false;
 
   private readonly manaColors = [
     { name: 'Blanco', code: 'W', color: 'f0f2f0' },
@@ -48,6 +50,7 @@ export class MainLayout {
   private readonly userService = inject(UserService);
   private readonly friendshipService = inject(FriendshipService);
   private readonly toastService = inject(ToastService);
+  private readonly arenaService = inject(ArenaService);
 
   constructor(private router: Router) {
     this.isLoggedIn = !!localStorage.getItem('user');
@@ -60,16 +63,48 @@ export class MainLayout {
       this.initializeNotifications();
     });
 
-    // Re-check login state after every navigation (e.g. after login redirects to /)
+    // Re-check login state after every navigation
     this.router.events
       .pipe(filter((e) => e instanceof NavigationEnd))
       .subscribe(() => {
         this.isLoggedIn = !!localStorage.getItem('user');
         this.loadUserFromStorage();
         this.initializeNotifications();
+        this.isBattleActive = this.router.url.startsWith('/battle');
+        this.updateLayoutClasses();
       });
 
+    this.isBattleActive = this.router.url.startsWith('/battle');
     this.initializeNotifications();
+    this.setupMatchmakingListener();
+    this.updateLayoutClasses();
+  }
+
+  private updateLayoutClasses(): void {
+    if (this.isBattleActive) {
+      document.body.classList.add('in-battle');
+    } else {
+      document.body.classList.remove('in-battle');
+    }
+  }
+
+  private setupMatchmakingListener(): void {
+    // Listen for new notifications to see if a match was found while searching
+    this.notificationService.notifications$.subscribe(notifications => {
+      const matchFound = notifications.find(n => n.type === 'MATCH_FOUND' && n.unread);
+      if (matchFound) {
+        const matchId = matchFound.data?.['matchId'];
+        if (matchId) {
+          this.notificationService.markAsRead(matchFound.id);
+          this.toastService.show('¡Partida encontrada! Entrando...', 'success');
+          this.router.navigateByUrl(`/battle/${matchId}`);
+        }
+      }
+    });
+  }
+
+  get isBattleRoute(): boolean {
+    return this.router.url.startsWith('/battle');
   }
 
     goHome(): void {
@@ -155,6 +190,29 @@ export class MainLayout {
     });
   }
 
+  acceptBattleInvite(notification: AppNotification): void {
+    const matchId = notification.data?.['matchId'];
+    if (matchId) {
+      this.arenaService.acceptInvite(Number(matchId)).subscribe({
+        next: () => {
+          this.toastService.show('¡Desafío aceptado! Entrando a la arena...', 'success');
+          this.notificationService.deleteNotification(notification.id);
+          this.router.navigateByUrl(`/battle/${matchId}`);
+        },
+        error: () => this.toastService.show('Error al aceptar la invitación', 'error')
+      });
+    } else {
+      this.toastService.show('¡Desafío aceptado! Buscando mesa...', 'success');
+      this.notificationService.deleteNotification(notification.id);
+      this.router.navigateByUrl('/arena');
+    }
+  }
+
+  rejectBattleInvite(notification: AppNotification): void {
+    this.toastService.show('Desafío rechazado', 'info');
+    this.notificationService.deleteNotification(notification.id);
+  }
+
   dismissToast(toastId: number): void {
     this.notificationService.dismissToast(toastId);
   }
@@ -167,6 +225,8 @@ export class MainLayout {
         return 'chat';
       case 'BATTLE_INVITE':
         return 'sports_martial_arts';
+      case 'MATCH_FOUND':
+        return 'arena';
       default:
         return 'notifications';
     }

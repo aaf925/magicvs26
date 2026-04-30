@@ -16,6 +16,8 @@ import { UserProfileComponent } from './features/users/user-profile/user-profile
 import { OAuthConfirm } from './features/oauth-confirm/oauth-confirm';
 import { ResetPassword } from './features/reset-password/reset-password';
 import { DeckDetailComponent } from './features/decks/deck-detail/deck-detail.component';
+import { MatchBrowserComponent } from './features/arena/match-browser/match-browser.component';
+import { BattleboardComponent } from './features/battle/battleboard/battleboard.component';
 
 export const routes: Routes = [
   {
@@ -39,6 +41,8 @@ export const routes: Routes = [
       { path: 'decks/:id', component: DeckDetailComponent },
       { path: 'users', component: UserDirectoryComponent },
       { path: 'users/:id', component: UserProfileComponent },
+      { path: 'arena', component: MatchBrowserComponent, canActivate: [authGuard] },
+      { path: 'battle/:id', component: BattleboardComponent, canActivate: [authGuard] },
       { path: 'reset-password/:token', component: ResetPassword }
     ]
   }

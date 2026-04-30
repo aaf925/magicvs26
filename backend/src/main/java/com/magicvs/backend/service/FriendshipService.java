@@ -13,8 +13,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class FriendshipService {
@@ -147,6 +149,15 @@ public class FriendshipService {
         return friendshipRepository.findByUsers(u1, u2)
                 .map(f -> f.getStatus().toString())
                 .orElse("NONE");
+    }
+
+    public List<User> getAcceptedFriends(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
+        
+        return friendshipRepository.findAcceptedFriendsForUser(user).stream()
+                .map(f -> f.getUser().getId().equals(userId) ? f.getFriend() : f.getUser())
+                .collect(Collectors.toList());
     }
 
     private void incrementFriendCount(User user) {
